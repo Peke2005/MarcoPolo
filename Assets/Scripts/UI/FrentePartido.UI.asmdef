@@ -1,0 +1,26 @@
+{
+    "name": "FrentePartido.UI",
+    "rootNamespace": "FrentePartido.UI",
+    "references": [
+        "FrentePartido.Data",
+        "FrentePartido.Core",
+        "FrentePartido.Player",
+        "FrentePartido.Combat",
+        "FrentePartido.Abilities",
+        "FrentePartido.Match",
+        "FrentePartido.Networking",
+        "FrentePartido.Pickups",
+        "Unity.Netcode.Runtime",
+        "Unity.TextMeshPro",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

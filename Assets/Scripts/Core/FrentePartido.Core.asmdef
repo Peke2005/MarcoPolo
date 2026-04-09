@@ -1,0 +1,19 @@
+{
+    "name": "FrentePartido.Core",
+    "rootNamespace": "FrentePartido.Core",
+    "references": [
+        "FrentePartido.Data",
+        "Unity.Netcode.Runtime",
+        "Unity.Services.Core",
+        "Unity.Services.Authentication"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

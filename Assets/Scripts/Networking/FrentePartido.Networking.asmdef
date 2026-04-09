@@ -1,0 +1,24 @@
+{
+    "name": "FrentePartido.Networking",
+    "rootNamespace": "FrentePartido.Networking",
+    "references": [
+        "FrentePartido.Data",
+        "FrentePartido.Core",
+        "Unity.Netcode.Runtime",
+        "Unity.Services.Core",
+        "Unity.Services.Authentication",
+        "Unity.Services.Relay",
+        "Unity.Services.Lobbies",
+        "Unity.Networking.Transport",
+        "Unity.Collections"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,0 +1,13 @@
+{
+  "name": "frente-partido-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Frente Partido game - balance tuning, project info, and build tools",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

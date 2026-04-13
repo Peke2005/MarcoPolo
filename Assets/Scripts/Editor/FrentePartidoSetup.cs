@@ -1213,6 +1213,7 @@ namespace FrentePartido.Editor
             camera.orthographicSize = 6;
             camera.backgroundColor = bgColor;
             camera.clearFlags = CameraClearFlags.SolidColor;
+            cam.transform.position = new Vector3(0f, 0f, -10f);
             cam.AddComponent<AudioListener>();
             cam.tag = "MainCamera";
             return cam;

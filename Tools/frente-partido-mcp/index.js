@@ -3,8 +3,11 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import fs from "fs/promises";
 import path from "path";
+import { fileURLToPath } from "url";
 
-const PROJECT_ROOT = path.resolve(process.env.FRENTE_PARTIDO_ROOT || path.join(process.cwd(), "../.."));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PROJECT_ROOT = path.resolve(process.env.FRENTE_PARTIDO_ROOT || path.join(__dirname, "../.."));
 const SCRIPTS_DIR = path.join(PROJECT_ROOT, "Assets/Scripts");
 const SO_DIR = path.join(PROJECT_ROOT, "Assets/ScriptableObjects");
 const DATA_DIR = path.join(PROJECT_ROOT, "Assets/Scripts/Data");

@@ -1174,9 +1174,11 @@ namespace FrentePartido.Editor
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sortingOrder = 0;
             CreatePlaceholderSprite(sr, 0.5f, new Color(0.35f, 0.3f, 0.25f));
-            go.transform.localScale = new Vector3(size.x, size.y, 1);
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.size = size;
 
             var col = go.AddComponent<BoxCollider2D>();
+            col.size = size;
         }
 
         private static void CreateCover(string name, Vector2 pos, Vector2 size)
@@ -1187,9 +1189,11 @@ namespace FrentePartido.Editor
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sortingOrder = 4;
             CreatePlaceholderSprite(sr, 0.5f, new Color(0.4f, 0.35f, 0.28f));
-            go.transform.localScale = new Vector3(size.x, size.y, 1);
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.size = size;
 
             var col = go.AddComponent<BoxCollider2D>();
+            col.size = size;
         }
 
         private static void CreateSpawnMarker(string name, Vector2 pos, Color color)
@@ -1199,6 +1203,8 @@ namespace FrentePartido.Editor
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sortingOrder = -5;
             CreatePlaceholderSprite(sr, 0.5f, new Color(color.r, color.g, color.b, 0.3f));
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.size = new Vector2(0.8f, 0.8f);
         }
 
         // =====================================================================
@@ -1261,6 +1267,9 @@ namespace FrentePartido.Editor
                 tex.Apply();
                 sr.sprite = Sprite.Create(tex, new Rect(0, 0, 4, 4), new Vector2(0.5f, 0.5f), 4f);
             }
+
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.size = new Vector2(size, size);
         }
 
         private static void SetPrivateField(object target, string fieldName, object value)

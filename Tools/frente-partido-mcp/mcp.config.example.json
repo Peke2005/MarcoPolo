@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "frente-partido": {
+      "command": "node",
+      "args": [
+        "C:/Users/polca/Desktop/MarcoPolo/Tools/frente-partido-mcp/index.js"
+      ],
+      "env": {
+        "FRENTE_PARTIDO_ROOT": "C:/Users/polca/Desktop/MarcoPolo"
+      }
+    }
+  }
+}

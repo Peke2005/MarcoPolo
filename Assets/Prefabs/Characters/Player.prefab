@@ -77,8 +77,8 @@ SpriteRenderer:
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
-  m_DrawMode: 0
-  m_Size: {x: 0.16, y: 0.16}
+  m_DrawMode: 1
+  m_Size: {x: 0.5, y: 0.5}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 1
@@ -207,7 +207,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  GlobalObjectIdHash: 2914429039
+  GlobalObjectIdHash: 1853398679
   InScenePlacedSourceGlobalObjectIdHash: 0
   AlwaysReplicateAsRoot: 0
   SynchronizeTransform: 1
@@ -263,7 +263,7 @@ MonoBehaviour:
     m_Name: 
     m_Type: 0
     m_ExpectedControlType: 
-    m_Id: 3c59f24f-dca0-4e31-92a3-a5a14b5647af
+    m_Id: 44013d42-45f1-4db8-8c9b-e4a23f8092cb
     m_Processors: 
     m_Interactions: 
     m_SingletonActionBindings: []
@@ -272,7 +272,7 @@ MonoBehaviour:
     m_Name: 
     m_Type: 0
     m_ExpectedControlType: 
-    m_Id: a5a3b3e7-3fbc-4631-89c3-8242d4138ca0
+    m_Id: 9bba6aa9-dfaf-4012-9160-6cbe6579f0c6
     m_Processors: 
     m_Interactions: 
     m_SingletonActionBindings: []
@@ -281,7 +281,7 @@ MonoBehaviour:
     m_Name: 
     m_Type: 0
     m_ExpectedControlType: 
-    m_Id: 5cf0fff6-0325-4651-b666-d21ccac28c07
+    m_Id: 8bb1c218-ad5e-48d1-a016-01aafc2f913d
     m_Processors: 
     m_Interactions: 
     m_SingletonActionBindings: []
@@ -290,7 +290,7 @@ MonoBehaviour:
     m_Name: 
     m_Type: 0
     m_ExpectedControlType: 
-    m_Id: dd21db88-5d30-4a85-b618-173fdbcb5660
+    m_Id: 2ac56825-2a20-4738-aafb-9b8ec4794ae5
     m_Processors: 
     m_Interactions: 
     m_SingletonActionBindings: []
@@ -299,7 +299,7 @@ MonoBehaviour:
     m_Name: 
     m_Type: 0
     m_ExpectedControlType: 
-    m_Id: cee30de6-579e-497b-99f8-519ccf960bb7
+    m_Id: 5a6bc823-082f-49c7-bffd-a9bbaa659244
     m_Processors: 
     m_Interactions: 
     m_SingletonActionBindings: []
@@ -308,7 +308,7 @@ MonoBehaviour:
     m_Name: 
     m_Type: 0
     m_ExpectedControlType: 
-    m_Id: c62e36d1-1b3a-4299-a563-73bc1a09a434
+    m_Id: 791e47e2-f936-45c7-b97c-793377baa792
     m_Processors: 
     m_Interactions: 
     m_SingletonActionBindings: []
@@ -317,7 +317,7 @@ MonoBehaviour:
     m_Name: 
     m_Type: 0
     m_ExpectedControlType: 
-    m_Id: 11580443-8d8e-418d-8f68-f93b42e37680
+    m_Id: 4884fc4f-b860-4d82-a13e-9267147d5f39
     m_Processors: 
     m_Interactions: 
     m_SingletonActionBindings: []
@@ -589,8 +589,8 @@ SpriteRenderer:
   m_Color: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   m_FlipX: 0
   m_FlipY: 0
-  m_DrawMode: 0
-  m_Size: {x: 0.16, y: 0.16}
+  m_DrawMode: 1
+  m_Size: {x: 0.2, y: 0.2}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 1

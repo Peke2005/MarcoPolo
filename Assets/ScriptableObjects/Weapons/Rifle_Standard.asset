@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8d1fe4b4a2819d046912cec8e70acbec, type: 3}
+  m_Name: Rifle_Standard
+  m_EditorClassIdentifier: 
+  weaponName: "Fusil Est\xE1ndar"
+  weaponId: rifle_standard
+  damage: 20
+  fireRate: 4
+  magazineSize: 8
+  reloadTime: 1.4
+  spreadAngle: 2
+  range: 30
+  muzzleFlashPrefab: {fileID: 0}
+  impactEffectPrefab: {fileID: 0}
+  projectilePrefab: {fileID: 0}
+  fireSound: {fileID: 0}
+  reloadSound: {fileID: 0}
+  emptyClickSound: {fileID: 0}

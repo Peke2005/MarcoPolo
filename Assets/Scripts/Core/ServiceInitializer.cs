@@ -27,7 +27,17 @@ namespace FrentePartido.Core
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"[ServiceInit] Failed to initialize: {e.Message}");
+                Debug.LogError($"[ServiceInit] Failed to initialize: {e}");
+
+                // Log all inner exceptions for diagnostics
+                var inner = e.InnerException;
+                while (inner != null)
+                {
+                    Debug.LogError($"[ServiceInit] Inner: {inner.Message}");
+                    inner = inner.InnerException;
+                }
+
+                throw;
             }
         }
     }

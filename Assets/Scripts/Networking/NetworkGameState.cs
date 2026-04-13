@@ -86,9 +86,10 @@ namespace FrentePartido.Networking
             Players = new NetworkList<PlayerSessionData>();
         }
 
-        private void OnDestroy()
+        public override void OnDestroy()
         {
             if (Instance == this) Instance = null;
+            base.OnDestroy();
         }
 
         public override void OnNetworkSpawn()

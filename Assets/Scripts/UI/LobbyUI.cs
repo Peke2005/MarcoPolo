@@ -9,57 +9,108 @@ namespace FrentePartido.UI
 {
     public class LobbyUI : MonoBehaviour
     {
+        // ── References (auto-built if null) ─────────────────
         [Header("Info")]
         [SerializeField] private TMP_Text _joinCodeText;
         [SerializeField] private Button _copyCodeButton;
+        [SerializeField] private TMP_Text _copyFeedbackText;
 
         [Header("Players")]
         [SerializeField] private TMP_Text _player1NameText;
-        [SerializeField] private TMP_Text _player2NameText;
         [SerializeField] private TMP_Text _player1StatusText;
+        [SerializeField] private Image _player1CardBg;
+        [SerializeField] private TMP_Text _player2NameText;
         [SerializeField] private TMP_Text _player2StatusText;
+        [SerializeField] private Image _player2CardBg;
 
         [Header("Abilities")]
         [SerializeField] private Button _dashButton;
         [SerializeField] private Button _shieldButton;
         [SerializeField] private Button _mineButton;
         [SerializeField] private TMP_Text _selectedAbilityText;
+        [SerializeField] private TMP_Text _selectedAbilityDesc;
         [SerializeField] private Image[] _abilityHighlights;
 
         [Header("Faction")]
         [SerializeField] private Button _blueButton;
         [SerializeField] private Button _redButton;
+        [SerializeField] private Image _blueHighlight;
+        [SerializeField] private Image _redHighlight;
 
         [Header("Actions")]
         [SerializeField] private Button _readyButton;
         [SerializeField] private Button _startGameButton;
         [SerializeField] private Button _leaveButton;
         [SerializeField] private TMP_Text _readyButtonText;
+        [SerializeField] private Image _readyButtonBg;
 
+        // ── State ───────────────────────────────────────────
         private bool _isReady;
         private int _selectedAbility;
+        private int _selectedFaction;
+        private float _copyTimer;
+
+        // ── Theme ───────────────────────────────────────────
+        static readonly Color BG        = c(0.08f, 0.09f, 0.12f);
+        static readonly Color CARD      = c(0.13f, 0.14f, 0.18f);
+        static readonly Color CARD_WAIT = c(0.10f, 0.11f, 0.14f);
+        static readonly Color BLUE      = c(0.25f, 0.50f, 0.95f);
+        static readonly Color RED       = c(0.90f, 0.28f, 0.28f);
+        static readonly Color GREEN     = c(0.20f, 0.78f, 0.40f);
+        static readonly Color YELLOW    = c(1.00f, 0.82f, 0.18f);
+        static readonly Color TXT       = c(0.92f, 0.93f, 0.96f);
+        static readonly Color TXT2      = c(0.55f, 0.58f, 0.65f);
+        static readonly Color MUTED     = c(0.38f, 0.40f, 0.46f);
+        static readonly Color BTN       = c(0.18f, 0.19f, 0.24f);
+        static readonly Color DANGER    = c(0.65f, 0.18f, 0.18f);
+        static readonly Color CODE_BG   = c(0.14f, 0.15f, 0.20f);
+        static Color c(float r, float g, float b) => new Color(r, g, b);
+
+        // ── Ability Data ────────────────────────────────────
+        static readonly string[] AB_NAME = { "Carrera Tactica", "Escudo Frontal", "Mina de Proximidad" };
+        static readonly string[] AB_DESC = { "Sprint rapido para reposicionarte", "Bloquea dano frontal brevemente", "Coloca una trampa explosiva" };
+        static readonly string[] AB_ICON = { ">>", "[=]", "(X)" };
+
+        // ════════════════════════════════════════════════════
+        //  LIFECYCLE
+        // ════════════════════════════════════════════════════
+
+        private void Awake()
+        {
+            if (_joinCodeText == null) BuildUI();
+        }
 
         private void Start()
         {
             SetupButtons();
             UpdateJoinCode();
             UpdatePlayerList();
+            HideCopyFeedback();
 
-            // Only host sees start button
-            bool isHost = NetworkSessionManager.Instance != null && NetworkSessionManager.Instance.IsHost;
+            bool isHost = NetworkSessionManager.Instance != null &&
+                          NetworkSessionManager.Instance.IsHost;
             if (_startGameButton != null)
             {
                 _startGameButton.gameObject.SetActive(isHost);
                 _startGameButton.interactable = false;
             }
 
-            // Default ability selection
             SelectAbility(GameConfig.Preferences.abilityIndex);
+            SelectFaction(GameConfig.Preferences.colorIndex);
 
             if (NetworkSessionManager.Instance != null)
             {
                 NetworkSessionManager.Instance.OnPlayerConnected += OnPlayerJoined;
                 NetworkSessionManager.Instance.OnPlayerDisconnected += OnPlayerLeft;
+            }
+        }
+
+        private void Update()
+        {
+            if (_copyTimer > 0)
+            {
+                _copyTimer -= Time.deltaTime;
+                if (_copyTimer <= 0) HideCopyFeedback();
             }
         }
 
@@ -72,19 +123,275 @@ namespace FrentePartido.UI
             }
         }
 
-        private void OnPlayerJoined(ulong clientId)
+        // ════════════════════════════════════════════════════
+        //  AUTO-BUILD UI
+        // ════════════════════════════════════════════════════
+
+        private void BuildUI()
         {
-            UpdatePlayerList();
-            CheckStartCondition();
+            // Clear existing children
+            for (int i = transform.childCount - 1; i >= 0; i--)
+                Destroy(transform.GetChild(i).gameObject);
+
+            // Full-screen dark background
+            var bg = Panel("BG", transform, BG);
+            Stretch(bg);
+
+            // Main container
+            var main = Panel("Main", bg.transform, Color.clear);
+            Anchors(main, 0.03f, 0.02f, 0.97f, 0.98f);
+            var vl = main.gameObject.AddComponent<VerticalLayoutGroup>();
+            vl.spacing = 10; vl.padding = new RectOffset(8, 8, 4, 4);
+            vl.childForceExpandWidth = true; vl.childForceExpandHeight = false;
+            vl.childControlWidth = true; vl.childControlHeight = false;
+
+            BuildHeader(main.transform);
+            BuildPlayers(main.transform);
+            BuildLoadout(main.transform);
+            BuildActions(main.transform);
         }
 
-        private void OnPlayerLeft(ulong clientId)
+        // ── HEADER ──────────────────────────────────────────
+
+        void BuildHeader(Transform p)
         {
-            UpdatePlayerList();
-            CheckStartCondition();
+            var row = LayoutRow("Header", p, 75);
+
+            // Left: title
+            var titleTxt = Txt("Title", row.transform, "SALA DE ESPERA", 26, FontStyles.Bold, TXT);
+            Anchors(titleTxt, 0, 0.45f, 0.5f, 1f);
+            titleTxt.alignment = TextAlignmentOptions.BottomLeft;
+
+            var sub = Txt("Sub", row.transform, "Prepara tu loadout y espera a tu rival", 13, FontStyles.Normal, TXT2);
+            Anchors(sub, 0, 0, 0.5f, 0.45f);
+            sub.alignment = TextAlignmentOptions.TopLeft;
+
+            // Right: code box
+            var codeBox = Panel("CodeBox", row.transform, CODE_BG);
+            Anchors(codeBox, 0.55f, 0.05f, 1f, 0.95f);
+
+            var codeLabel = Txt("CLabel", codeBox.transform, "CODIGO DE SALA", 9, FontStyles.Bold, MUTED);
+            Anchors(codeLabel, 0.05f, 0.7f, 0.95f, 0.95f);
+            codeLabel.alignment = TextAlignmentOptions.Left;
+
+            _joinCodeText = Txt("Code", codeBox.transform, "------", 24, FontStyles.Bold, YELLOW);
+            Anchors(_joinCodeText, 0.05f, 0.1f, 0.72f, 0.7f);
+            _joinCodeText.alignment = TextAlignmentOptions.Center;
+            _joinCodeText.characterSpacing = 5;
+
+            // Copy btn
+            var copyBg = Panel("CopyBg", codeBox.transform, BTN);
+            Anchors(copyBg, 0.75f, 0.15f, 0.95f, 0.65f);
+            _copyCodeButton = copyBg.gameObject.AddComponent<Button>();
+            var copyTxt = Txt("CopyTxt", copyBg.transform, "COPIAR", 10, FontStyles.Bold, TXT);
+            Stretch(copyTxt); copyTxt.alignment = TextAlignmentOptions.Center;
+
+            _copyFeedbackText = Txt("Feedback", codeBox.transform, "Copiado!", 10, FontStyles.Italic, GREEN);
+            Anchors(_copyFeedbackText, 0.72f, 0.68f, 1f, 0.95f);
+            _copyFeedbackText.alignment = TextAlignmentOptions.Center;
         }
 
-        private void SetupButtons()
+        // ── PLAYERS ─────────────────────────────────────────
+
+        void BuildPlayers(Transform p)
+        {
+            var section = LayoutRow("Players", p, 120);
+
+            var label = Txt("PLabel", section.transform, "JUGADORES", 10, FontStyles.Bold, MUTED);
+            Anchors(label, 0, 0.9f, 1, 1); label.alignment = TextAlignmentOptions.BottomLeft;
+
+            var cards = Panel("Cards", section.transform, Color.clear);
+            Anchors(cards, 0, 0, 1, 0.87f);
+            var hl = cards.gameObject.AddComponent<HorizontalLayoutGroup>();
+            hl.spacing = 12; hl.childForceExpandWidth = true; hl.childForceExpandHeight = true;
+            hl.childControlWidth = true; hl.childControlHeight = true;
+
+            // VS text in middle
+            BuildPlayerCard(cards.transform, "P1", true,
+                out _player1NameText, out _player1StatusText, out _player1CardBg);
+
+            // VS separator
+            var vs = new GameObject("VS", typeof(RectTransform), typeof(LayoutElement));
+            vs.transform.SetParent(cards.transform, false);
+            vs.GetComponent<LayoutElement>().preferredWidth = 40;
+            vs.GetComponent<LayoutElement>().flexibleWidth = 0;
+            var vsTxt = Txt("VSTxt", vs.transform, "VS", 20, FontStyles.Bold, MUTED);
+            Stretch(vsTxt); vsTxt.alignment = TextAlignmentOptions.Center;
+
+            BuildPlayerCard(cards.transform, "P2", false,
+                out _player2NameText, out _player2StatusText, out _player2CardBg);
+        }
+
+        void BuildPlayerCard(Transform p, string id, bool isLocal,
+            out TMP_Text nameT, out TMP_Text statusT, out Image cardBg)
+        {
+            var card = Panel($"{id}Card", p, isLocal ? CARD : CARD_WAIT);
+            cardBg = card.GetComponent<Image>();
+
+            // Badge
+            var badge = Panel($"{id}Badge", card.transform, isLocal ? BLUE : RED);
+            Anchors(badge, 0.05f, 0.72f, 0.22f, 0.9f);
+            var badgeTxt = Txt($"{id}BT", badge.transform, isLocal ? "P1" : "P2",
+                11, FontStyles.Bold, Color.white);
+            Stretch(badgeTxt); badgeTxt.alignment = TextAlignmentOptions.Center;
+
+            // Status dot
+            var dot = Panel($"{id}Dot", card.transform, isLocal ? GREEN : MUTED);
+            Anchors(dot, 0.85f, 0.75f, 0.93f, 0.87f);
+
+            // Name
+            nameT = Txt($"{id}Name", card.transform,
+                isLocal ? "Jugador 1" : "Esperando rival...",
+                17, FontStyles.Bold, isLocal ? TXT : TXT2);
+            Anchors(nameT, 0.05f, 0.35f, 0.95f, 0.68f);
+            nameT.alignment = TextAlignmentOptions.Left;
+
+            // Status
+            statusT = Txt($"{id}Status", card.transform,
+                isLocal ? "Conectado" : "",
+                12, FontStyles.Normal, isLocal ? GREEN : TXT2);
+            Anchors(statusT, 0.05f, 0.08f, 0.95f, 0.35f);
+            statusT.alignment = TextAlignmentOptions.Left;
+        }
+
+        // ── LOADOUT ─────────────────────────────────────────
+
+        void BuildLoadout(Transform p)
+        {
+            var section = LayoutRow("Loadout", p, 175);
+            var cols = Panel("Cols", section.transform, Color.clear);
+            Stretch(cols);
+            var hl = cols.gameObject.AddComponent<HorizontalLayoutGroup>();
+            hl.spacing = 12; hl.childForceExpandWidth = true; hl.childForceExpandHeight = true;
+            hl.childControlWidth = true; hl.childControlHeight = true;
+
+            BuildAbilities(cols.transform);
+            BuildFaction(cols.transform);
+        }
+
+        void BuildAbilities(Transform p)
+        {
+            var panel = Panel("AbPanel", p, CARD);
+
+            var title = Txt("AbTitle", panel.transform, "HABILIDAD", 10, FontStyles.Bold, MUTED);
+            Anchors(title, 0.05f, 0.88f, 0.95f, 0.98f); title.alignment = TextAlignmentOptions.Left;
+
+            // Buttons row
+            var row = Panel("AbRow", panel.transform, Color.clear);
+            Anchors(row, 0.04f, 0.52f, 0.96f, 0.85f);
+            var hl = row.gameObject.AddComponent<HorizontalLayoutGroup>();
+            hl.spacing = 8; hl.childForceExpandWidth = true; hl.childForceExpandHeight = true;
+            hl.childControlWidth = true; hl.childControlHeight = true;
+
+            _abilityHighlights = new Image[3];
+            _dashButton   = AbilityBtn(row.transform, "Dash",   AB_ICON[0], 0);
+            _shieldButton = AbilityBtn(row.transform, "Shield", AB_ICON[1], 1);
+            _mineButton   = AbilityBtn(row.transform, "Mine",   AB_ICON[2], 2);
+
+            // Info
+            _selectedAbilityText = Txt("AbName", panel.transform, AB_ICON[0] + " " + AB_NAME[0],
+                15, FontStyles.Bold, TXT);
+            Anchors(_selectedAbilityText, 0.05f, 0.25f, 0.95f, 0.5f);
+            _selectedAbilityText.alignment = TextAlignmentOptions.Left;
+
+            _selectedAbilityDesc = Txt("AbDesc", panel.transform, AB_DESC[0],
+                12, FontStyles.Normal, TXT2);
+            Anchors(_selectedAbilityDesc, 0.05f, 0.05f, 0.95f, 0.25f);
+            _selectedAbilityDesc.alignment = TextAlignmentOptions.Left;
+        }
+
+        Button AbilityBtn(Transform p, string name, string icon, int idx)
+        {
+            var bg = Panel(name, p, BTN);
+            _abilityHighlights[idx] = bg.GetComponent<Image>();
+            var btn = bg.gameObject.AddComponent<Button>();
+
+            var label = Txt($"{name}Lbl", bg.transform, icon, 18, FontStyles.Bold, TXT);
+            Anchors(label, 0, 0.35f, 1, 0.95f); label.alignment = TextAlignmentOptions.Center;
+
+            var sub = Txt($"{name}Sub", bg.transform, AB_NAME[idx], 8, FontStyles.Normal, TXT2);
+            Anchors(sub, 0, 0.02f, 1, 0.35f); sub.alignment = TextAlignmentOptions.Center;
+
+            return btn;
+        }
+
+        void BuildFaction(Transform p)
+        {
+            var panel = Panel("FacPanel", p, CARD);
+            panel.gameObject.AddComponent<LayoutElement>().flexibleWidth = 0.4f;
+
+            var title = Txt("FTitle", panel.transform, "EQUIPO", 10, FontStyles.Bold, MUTED);
+            Anchors(title, 0.08f, 0.88f, 0.92f, 0.98f); title.alignment = TextAlignmentOptions.Left;
+
+            // Blue
+            var blBg = Panel("BlBtn", panel.transform, BLUE);
+            Anchors(blBg, 0.08f, 0.52f, 0.92f, 0.83f);
+            _blueButton = blBg.gameObject.AddComponent<Button>();
+            var blTxt = Txt("BlTxt", blBg.transform, "AZUL", 16, FontStyles.Bold, Color.white);
+            Stretch(blTxt); blTxt.alignment = TextAlignmentOptions.Center;
+            _blueHighlight = Panel("BlHL", blBg.transform, new Color(1, 1, 1, 0.25f)).GetComponent<Image>();
+            Stretch(_blueHighlight);
+
+            // Red
+            var rdBg = Panel("RdBtn", panel.transform, RED);
+            Anchors(rdBg, 0.08f, 0.13f, 0.92f, 0.44f);
+            _redButton = rdBg.gameObject.AddComponent<Button>();
+            var rdTxt = Txt("RdTxt", rdBg.transform, "ROJO", 16, FontStyles.Bold, Color.white);
+            Stretch(rdTxt); rdTxt.alignment = TextAlignmentOptions.Center;
+            _redHighlight = Panel("RdHL", rdBg.transform, new Color(1, 1, 1, 0.25f)).GetComponent<Image>();
+            Stretch(_redHighlight);
+        }
+
+        // ── ACTIONS ─────────────────────────────────────────
+
+        void BuildActions(Transform p)
+        {
+            var section = LayoutRow("Actions", p, 52);
+            var row = Panel("ARow", section.transform, Color.clear);
+            Stretch(row);
+            var hl = row.gameObject.AddComponent<HorizontalLayoutGroup>();
+            hl.spacing = 10; hl.childForceExpandWidth = false; hl.childForceExpandHeight = true;
+            hl.childControlWidth = false; hl.childControlHeight = true;
+
+            // Leave
+            _leaveButton = ActionBtn(row.transform, "Leave", "SALIR", DANGER, 110);
+
+            // Spacer
+            var sp = new GameObject("Sp", typeof(RectTransform), typeof(LayoutElement));
+            sp.transform.SetParent(row.transform, false);
+            sp.GetComponent<LayoutElement>().flexibleWidth = 1;
+
+            // Ready
+            var readyBg = Panel("ReadyBg", row.transform, GREEN);
+            readyBg.gameObject.AddComponent<LayoutElement>().preferredWidth = 160;
+            _readyButton = readyBg.gameObject.AddComponent<Button>();
+            _readyButtonBg = readyBg.GetComponent<Image>();
+            _readyButtonText = Txt("ReadyTxt", readyBg.transform, "LISTO", 17, FontStyles.Bold, Color.white);
+            Stretch(_readyButtonText); _readyButtonText.alignment = TextAlignmentOptions.Center;
+
+            // Start (host only)
+            var startBg = Panel("StartBg", row.transform, BLUE);
+            startBg.gameObject.AddComponent<LayoutElement>().preferredWidth = 160;
+            _startGameButton = startBg.gameObject.AddComponent<Button>();
+            var startTxt = Txt("StartTxt", startBg.transform, "INICIAR", 17, FontStyles.Bold, Color.white);
+            Stretch(startTxt); startTxt.alignment = TextAlignmentOptions.Center;
+        }
+
+        Button ActionBtn(Transform p, string name, string label, Color bg, float w)
+        {
+            var panel = Panel(name, p, bg);
+            panel.gameObject.AddComponent<LayoutElement>().preferredWidth = w;
+            var btn = panel.gameObject.AddComponent<Button>();
+            var txt = Txt($"{name}T", panel.transform, label, 14, FontStyles.Bold, Color.white);
+            Stretch(txt); txt.alignment = TextAlignmentOptions.Center;
+            return btn;
+        }
+
+        // ════════════════════════════════════════════════════
+        //  LOGIC
+        // ════════════════════════════════════════════════════
+
+        void SetupButtons()
         {
             _dashButton?.onClick.AddListener(() => SelectAbility(0));
             _shieldButton?.onClick.AddListener(() => SelectAbility(1));
@@ -97,69 +404,83 @@ namespace FrentePartido.UI
             _copyCodeButton?.onClick.AddListener(CopyCodeToClipboard);
         }
 
-        private void UpdateJoinCode()
+        void UpdateJoinCode()
         {
-            if (_joinCodeText != null && NetworkSessionManager.Instance != null)
-            {
-                string code = NetworkSessionManager.Instance.JoinCode;
-                _joinCodeText.text = $"CÓDIGO: {code}";
-            }
+            if (_joinCodeText == null || NetworkSessionManager.Instance == null) return;
+            _joinCodeText.text = NetworkSessionManager.Instance.JoinCode ?? "------";
         }
 
-        private void CopyCodeToClipboard()
+        void CopyCodeToClipboard()
         {
-            if (NetworkSessionManager.Instance != null)
-            {
-                GUIUtility.systemCopyBuffer = NetworkSessionManager.Instance.JoinCode;
-                Debug.Log("[Lobby] Code copied to clipboard");
-            }
+            if (NetworkSessionManager.Instance == null) return;
+            GUIUtility.systemCopyBuffer = NetworkSessionManager.Instance.JoinCode;
+            ShowCopyFeedback();
         }
 
-        private void SelectAbility(int index)
+        void ShowCopyFeedback()
         {
-            _selectedAbility = index;
-            GameConfig.Preferences.abilityIndex = index;
+            if (_copyFeedbackText != null)
+            {
+                _copyFeedbackText.gameObject.SetActive(true);
+                _copyFeedbackText.text = "Copiado!";
+            }
+            _copyTimer = 2f;
+        }
 
-            string[] names = { "Carrera Táctica", "Escudo Frontal", "Mina de Proximidad" };
-            if (_selectedAbilityText != null && index < names.Length)
-                _selectedAbilityText.text = names[index];
+        void HideCopyFeedback()
+        {
+            if (_copyFeedbackText != null)
+                _copyFeedbackText.gameObject.SetActive(false);
+        }
 
-            // Update highlights
+        void SelectAbility(int index)
+        {
+            _selectedAbility = Mathf.Clamp(index, 0, 2);
+            GameConfig.Preferences.abilityIndex = _selectedAbility;
+
+            if (_selectedAbilityText != null)
+                _selectedAbilityText.text = AB_ICON[_selectedAbility] + " " + AB_NAME[_selectedAbility];
+            if (_selectedAbilityDesc != null)
+                _selectedAbilityDesc.text = AB_DESC[_selectedAbility];
+
             if (_abilityHighlights != null)
-            {
                 for (int i = 0; i < _abilityHighlights.Length; i++)
-                {
                     if (_abilityHighlights[i] != null)
-                        _abilityHighlights[i].enabled = (i == index);
-                }
-            }
+                        _abilityHighlights[i].color = i == _selectedAbility ? YELLOW : BTN;
 
-            LobbyManager.UpdatePlayerData("AbilityId", index.ToString());
+            LobbyManager.UpdatePlayerData("AbilityId", _selectedAbility.ToString());
         }
 
-        private async void SelectFaction(int faction)
+        async void SelectFaction(int faction)
         {
+            _selectedFaction = faction;
             GameConfig.Preferences.colorIndex = faction;
+
+            if (_blueHighlight != null) _blueHighlight.enabled = faction == 0;
+            if (_redHighlight != null)  _redHighlight.enabled  = faction == 1;
+
             await LobbyManager.UpdatePlayerData("Faction", faction.ToString());
         }
 
-        private async void ToggleReady()
+        async void ToggleReady()
         {
             _isReady = !_isReady;
             if (_readyButtonText != null)
-                _readyButtonText.text = _isReady ? "LISTO ✓" : "LISTO";
+                _readyButtonText.text = _isReady ? "LISTO  !" : "LISTO";
+            if (_readyButtonBg != null)
+                _readyButtonBg.color = _isReady ? GREEN : BTN;
 
             await LobbyManager.UpdatePlayerData("IsReady", _isReady.ToString());
             CheckStartCondition();
         }
 
-        private void OnStartGame()
+        void OnStartGame()
         {
             GameConfig.Save();
             SceneFlowController.LoadSceneNetwork(SceneFlowController.SCENE_GAME);
         }
 
-        private void OnLeave()
+        void OnLeave()
         {
             if (NetworkSessionManager.Instance != null)
                 NetworkSessionManager.Instance.LeaveSession();
@@ -167,30 +488,77 @@ namespace FrentePartido.UI
                 SceneFlowController.ReturnToMainMenu();
         }
 
-        private void UpdatePlayerList()
+        void UpdatePlayerList()
         {
-            // Update from NetworkGameState
-            var state = NetworkGameState.Instance;
-            if (state == null) return;
+            bool hasP2 = Unity.Netcode.NetworkManager.Singleton != null &&
+                         Unity.Netcode.NetworkManager.Singleton.ConnectedClientsIds.Count >= 2;
 
             if (_player1NameText != null)
-                _player1NameText.text = "Jugador 1";
-            if (_player2NameText != null)
-                _player2NameText.text = "Esperando...";
-
+                _player1NameText.text = GameConfig.Preferences.playerName ?? "Jugador 1";
             if (_player1StatusText != null)
                 _player1StatusText.text = "Conectado";
+            if (_player1CardBg != null)
+                _player1CardBg.color = CARD;
+
+            if (_player2NameText != null)
+                _player2NameText.text = hasP2 ? "Jugador 2" : "Esperando rival...";
             if (_player2StatusText != null)
-                _player2StatusText.text = "---";
+                _player2StatusText.text = hasP2 ? "Conectado" : "";
+            if (_player2CardBg != null)
+                _player2CardBg.color = hasP2 ? CARD : CARD_WAIT;
         }
 
-        private void CheckStartCondition()
+        void OnPlayerJoined(ulong id) { UpdatePlayerList(); CheckStartCondition(); }
+        void OnPlayerLeft(ulong id)   { UpdatePlayerList(); CheckStartCondition(); }
+
+        void CheckStartCondition()
         {
             if (_startGameButton == null) return;
-            // Enable start when 2 players connected (simplified)
-            bool canStart = Unity.Netcode.NetworkManager.Singleton != null &&
-                           Unity.Netcode.NetworkManager.Singleton.ConnectedClientsIds.Count >= 2;
-            _startGameButton.interactable = canStart;
+            bool ok = Unity.Netcode.NetworkManager.Singleton != null &&
+                      Unity.Netcode.NetworkManager.Singleton.ConnectedClientsIds.Count >= 2;
+            _startGameButton.interactable = ok;
         }
+
+        // ════════════════════════════════════════════════════
+        //  UI HELPERS
+        // ════════════════════════════════════════════════════
+
+        static RectTransform Panel(string n, Transform p, Color col)
+        {
+            var go = new GameObject(n, typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(p, false);
+            go.GetComponent<Image>().color = col;
+            return go.GetComponent<RectTransform>();
+        }
+
+        static RectTransform LayoutRow(string n, Transform p, float h)
+        {
+            var go = new GameObject(n, typeof(RectTransform), typeof(LayoutElement));
+            go.transform.SetParent(p, false);
+            var le = go.GetComponent<LayoutElement>();
+            le.preferredHeight = h; le.flexibleWidth = 1;
+            return go.GetComponent<RectTransform>();
+        }
+
+        static TMP_Text Txt(string n, Transform p, string text, float size, FontStyles style, Color col)
+        {
+            var go = new GameObject(n, typeof(RectTransform), typeof(TextMeshProUGUI));
+            go.transform.SetParent(p, false);
+            var t = go.GetComponent<TextMeshProUGUI>();
+            t.text = text; t.fontSize = size; t.fontStyle = style; t.color = col;
+            t.raycastTarget = false; t.overflowMode = TextOverflowModes.Ellipsis;
+            return t;
+        }
+
+        static void Stretch(RectTransform rt)
+        { rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one; rt.offsetMin = rt.offsetMax = Vector2.zero; }
+
+        static void Stretch(Component c) => Stretch(c.GetComponent<RectTransform>());
+
+        static void Anchors(RectTransform rt, float xMin, float yMin, float xMax, float yMax)
+        { rt.anchorMin = new Vector2(xMin, yMin); rt.anchorMax = new Vector2(xMax, yMax); rt.offsetMin = rt.offsetMax = Vector2.zero; }
+
+        static void Anchors(Component c, float xMin, float yMin, float xMax, float yMax)
+            => Anchors(c.GetComponent<RectTransform>(), xMin, yMin, xMax, yMax);
     }
 }

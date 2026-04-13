@@ -32,7 +32,7 @@ namespace FrentePartido.Combat
         [SerializeField] private LayerMask obstacleLayer;
 
         // --- Network State ---
-        public NetworkVariable<ulong> OwnerClientId = new(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+        public NetworkVariable<ulong> GrenadeOwnerClientId = new(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
         // --- Cached ---
         private Rigidbody2D _rb;
@@ -77,7 +77,7 @@ namespace FrentePartido.Combat
         {
             if (!IsServer) return;
 
-            OwnerClientId.Value = ownerClientId;
+            GrenadeOwnerClientId.Value = ownerClientId;
 
             float throwForce = balanceData != null ? balanceData.grenadeThrowForce : 12f;
             _rb.velocity = direction.normalized * throwForce;
@@ -150,7 +150,7 @@ namespace FrentePartido.Combat
                 int damage = DamageDealer.CalculateGrenadeDamage(baseDamage, distance, radius);
                 if (damage > 0)
                 {
-                    targetHealth.TakeDamageServerRpc(damage, OwnerClientId.Value);
+                    targetHealth.TakeDamageServerRpc(damage, GrenadeOwnerClientId.Value);
                 }
             }
 

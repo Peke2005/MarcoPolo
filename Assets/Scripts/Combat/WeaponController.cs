@@ -16,6 +16,8 @@ namespace FrentePartido.Combat
         [Header("Weapon")]
         [SerializeField] private WeaponData weaponData;
 
+        public float ReloadTime => weaponData != null ? weaponData.reloadTime : 1.4f;
+
         [Header("Hitscan")]
         [SerializeField] private LayerMask hitLayers;
         [SerializeField] private LayerMask obstacleLayer;

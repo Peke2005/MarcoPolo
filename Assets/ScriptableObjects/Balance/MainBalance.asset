@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fbf05be88886c694b9c4d4e12a1ded95, type: 3}
+  m_Name: MainBalance
+  m_EditorClassIdentifier: 
+  playerMaxHealth: 100
+  moveSpeed: 5
+  grenadesPerRound: 1
+  grenadeDamage: 40
+  grenadeRadius: 2.5
+  grenadeFuseTime: 1.2
+  grenadeThrowForce: 12
+  beaconActivationTime: 30
+  beaconCaptureTime: 5
+  beaconRadius: 2
+  roundDuration: 90
+  roundIntroDuration: 3
+  roundEndDuration: 6
+  suddenDeathDuration: 15
+  suddenDeathDamagePerSecond: 5
+  roundsToWin: 3
+  maxRounds: 5
+  pickup1SpawnTime: 20
+  pickup2SpawnTime: 55
+  healthPickupAmount: 25
+  armorPickupAmount: 30
+  pickupRespawnTime: 15

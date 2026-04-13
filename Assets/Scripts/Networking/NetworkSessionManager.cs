@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Unity.Netcode;
+using Unity.Netcode.Transports.UTP;
 using UnityEngine;
 using FrentePartido.Core;
 
@@ -14,6 +15,21 @@ namespace FrentePartido.Networking
     public class NetworkSessionManager : MonoBehaviour
     {
         public static NetworkSessionManager Instance { get; private set; }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void EnsureInstance()
+        {
+            if (Instance != null) return;
+
+            var go = new GameObject("NetworkSessionManager");
+            var transport = go.AddComponent<UnityTransport>();
+            var netManager = go.AddComponent<NetworkManager>();
+            netManager.NetworkConfig = new NetworkConfig
+            {
+                NetworkTransport = transport
+            };
+            go.AddComponent<NetworkSessionManager>();
+        }
 
         public string JoinCode { get; private set; }
         public bool IsHost { get; private set; }

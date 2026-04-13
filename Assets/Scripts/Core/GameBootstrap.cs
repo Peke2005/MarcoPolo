@@ -5,7 +5,7 @@ namespace FrentePartido.Core
 {
     public class GameBootstrap : MonoBehaviour
     {
-        [SerializeField] private string _mainMenuScene = "01_MainMenu";
+        [SerializeField] private string _firstScene = "01_Auth";
 
         private async void Start()
         {
@@ -16,7 +16,7 @@ namespace FrentePartido.Core
 
             GameConfig.Load();
 
-            SceneManager.LoadScene(_mainMenuScene);
+            SceneManager.LoadScene(_firstScene);
         }
     }
 }

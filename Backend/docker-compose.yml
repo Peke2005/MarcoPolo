@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: frentepartido
+      POSTGRES_USER: fpuser
+      POSTGRES_PASSWORD: fppass123
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  api:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: frentepartido
+      DB_USER: fpuser
+      DB_PASSWORD: fppass123
+      JWT_SECRET: cambiar-este-secreto-en-produccion
+      PORT: 3001
+    depends_on:
+      - db
+
+volumes:
+  pgdata:

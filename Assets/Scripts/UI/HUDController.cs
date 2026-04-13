@@ -41,6 +41,7 @@ namespace FrentePartido.UI
         private Combat.WeaponController _localWeapon;
         private Abilities.AbilityController _localAbility;
         private int _maxHealth;
+        private Coroutine _reloadBarCoroutine;
 
         public void Initialize(Player.PlayerHealth health, Combat.WeaponController weapon,
                               Abilities.AbilityController ability, int maxHealth)
@@ -56,7 +57,12 @@ namespace FrentePartido.UI
                 _localHealth.OnArmorChanged += UpdateArmor;
             }
             if (_localWeapon != null)
+            {
                 _localWeapon.OnAmmoChanged += UpdateAmmo;
+                _localWeapon.OnReloadStarted += HandleReloadStarted;
+                _localWeapon.OnReloadFinished += HandleReloadFinished;
+            }
+            if (_reloadBar != null) _reloadBar.fillAmount = 0f;
             if (_localAbility != null)
                 _localAbility.OnCooldownChanged += UpdateAbilityCooldown;
 
@@ -74,7 +80,11 @@ namespace FrentePartido.UI
                 _localHealth.OnArmorChanged -= UpdateArmor;
             }
             if (_localWeapon != null)
+            {
                 _localWeapon.OnAmmoChanged -= UpdateAmmo;
+                _localWeapon.OnReloadStarted -= HandleReloadStarted;
+                _localWeapon.OnReloadFinished -= HandleReloadFinished;
+            }
             if (_localAbility != null)
                 _localAbility.OnCooldownChanged -= UpdateAbilityCooldown;
 
@@ -157,6 +167,36 @@ namespace FrentePartido.UI
                 BeaconState.Captured => "¡CAPTURADO!",
                 _ => ""
             };
+        }
+
+        private void HandleReloadStarted()
+        {
+            if (_reloadBar == null || _localWeapon == null) return;
+            if (_reloadBarCoroutine != null) StopCoroutine(_reloadBarCoroutine);
+            _reloadBarCoroutine = StartCoroutine(ReloadBarCoroutine(_localWeapon.ReloadTime));
+        }
+
+        private void HandleReloadFinished()
+        {
+            if (_reloadBarCoroutine != null)
+            {
+                StopCoroutine(_reloadBarCoroutine);
+                _reloadBarCoroutine = null;
+            }
+            if (_reloadBar != null) _reloadBar.fillAmount = 0f;
+        }
+
+        private IEnumerator ReloadBarCoroutine(float duration)
+        {
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.deltaTime;
+                if (_reloadBar != null) _reloadBar.fillAmount = elapsed / duration;
+                yield return null;
+            }
+            if (_reloadBar != null) _reloadBar.fillAmount = 0f;
+            _reloadBarCoroutine = null;
         }
 
         public void SetGrenadeAvailable(bool available)

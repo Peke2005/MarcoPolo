@@ -9,10 +9,11 @@ namespace FrentePartido.Core
     public static class SceneFlowController
     {
         public const string SCENE_BOOT = "00_Boot";
-        public const string SCENE_MAIN_MENU = "01_MainMenu";
-        public const string SCENE_LOBBY = "02_Lobby";
-        public const string SCENE_GAME = "03_Game";
-        public const string SCENE_POST_MATCH = "04_PostMatch";
+        public const string SCENE_AUTH = "01_Auth";
+        public const string SCENE_MAIN_MENU = "02_MainMenu";
+        public const string SCENE_LOBBY = "03_Lobby";
+        public const string SCENE_GAME = "04_Game";
+        public const string SCENE_POST_MATCH = "05_PostMatch";
 
         public static event Action<string> OnSceneLoadStarted;
         public static event Action<string> OnSceneLoadCompleted;

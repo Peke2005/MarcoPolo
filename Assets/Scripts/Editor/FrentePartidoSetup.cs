@@ -1174,8 +1174,7 @@ namespace FrentePartido.Editor
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sortingOrder = 0;
             CreatePlaceholderSprite(sr, 0.5f, new Color(0.35f, 0.3f, 0.25f));
-            sr.drawMode = SpriteDrawMode.Sliced;
-            sr.size = size;
+            SetSpriteWorldSize(sr, size);
 
             var col = go.AddComponent<BoxCollider2D>();
             col.size = size;
@@ -1189,8 +1188,7 @@ namespace FrentePartido.Editor
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sortingOrder = 4;
             CreatePlaceholderSprite(sr, 0.5f, new Color(0.4f, 0.35f, 0.28f));
-            sr.drawMode = SpriteDrawMode.Sliced;
-            sr.size = size;
+            SetSpriteWorldSize(sr, size);
 
             var col = go.AddComponent<BoxCollider2D>();
             col.size = size;
@@ -1203,8 +1201,7 @@ namespace FrentePartido.Editor
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sortingOrder = -5;
             CreatePlaceholderSprite(sr, 0.5f, new Color(color.r, color.g, color.b, 0.3f));
-            sr.drawMode = SpriteDrawMode.Sliced;
-            sr.size = new Vector2(0.8f, 0.8f);
+            SetSpriteWorldSize(sr, new Vector2(0.8f, 0.8f));
         }
 
         // =====================================================================
@@ -1268,8 +1265,21 @@ namespace FrentePartido.Editor
                 sr.sprite = Sprite.Create(tex, new Rect(0, 0, 4, 4), new Vector2(0.5f, 0.5f), 4f);
             }
 
-            sr.drawMode = SpriteDrawMode.Sliced;
-            sr.size = new Vector2(size, size);
+            sr.drawMode = SpriteDrawMode.Simple;
+            SetSpriteWorldSize(sr, new Vector2(size, size));
+        }
+
+        private static void SetSpriteWorldSize(SpriteRenderer sr, Vector2 targetSize)
+        {
+            if (sr == null || sr.sprite == null) return;
+
+            Vector2 spriteSize = sr.sprite.bounds.size;
+            if (spriteSize.x <= 0f || spriteSize.y <= 0f) return;
+
+            Vector3 scale = sr.transform.localScale;
+            scale.x = targetSize.x / spriteSize.x;
+            scale.y = targetSize.y / spriteSize.y;
+            sr.transform.localScale = scale;
         }
 
         private static void SetPrivateField(object target, string fieldName, object value)

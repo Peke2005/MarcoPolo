@@ -4,6 +4,7 @@
     "references": [
         "FrentePartido.Data",
         "FrentePartido.Player",
+        "FrentePartido.Core",
         "Unity.Netcode.Runtime"
     ],
     "includePlatforms": [],

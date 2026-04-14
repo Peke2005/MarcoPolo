@@ -1,37 +1,24 @@
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace FrentePartido.Player
 {
-    /// <summary>
-    /// Handles aim rotation toward the mouse cursor.
-    /// Syncs aim angle via NetworkVariable so remote clients see correct aim direction.
-    /// </summary>
     public class PlayerAimController : NetworkBehaviour
     {
         [SerializeField] private Transform weaponPivot;
 
-        /// <summary>
-        /// Aim angle in degrees, synced to all clients.
-        /// </summary>
         public NetworkVariable<float> AimAngle = new NetworkVariable<float>(
             0f,
             NetworkVariableReadPermission.Everyone,
             NetworkVariableWritePermission.Owner);
 
-        private PlayerInputReader _input;
-
-        private void Awake()
-        {
-            _input = GetComponent<PlayerInputReader>();
-        }
+        private Camera _cam;
 
         public override void OnNetworkSpawn()
         {
             base.OnNetworkSpawn();
             AimAngle.OnValueChanged += OnAimAngleChanged;
-
-            // Apply initial angle for late joiners
             ApplyRotation(AimAngle.Value);
         }
 
@@ -43,38 +30,33 @@ namespace FrentePartido.Player
 
         private void Update()
         {
-            if (!IsOwner || !IsSpawned) return;
-            if (_input == null || !_input.IsInputEnabled) return;
+            if (!IsOwner) return;
 
-            Vector2 aimTarget = _input.AimWorldPosition;
-            Vector2 origin = (Vector2)transform.position;
-            Vector2 direction = aimTarget - origin;
+            if (_cam == null) _cam = Camera.main;
+            if (_cam == null || Mouse.current == null) return;
 
-            if (direction.sqrMagnitude < 0.001f) return;
+            Vector2 mouseScreen = Mouse.current.position.ReadValue();
+            Vector3 mouseWorld = _cam.ScreenToWorldPoint(
+                new Vector3(mouseScreen.x, mouseScreen.y, -_cam.transform.position.z));
 
-            float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+            Vector2 dir = (Vector2)mouseWorld - (Vector2)transform.position;
+            if (dir.sqrMagnitude < 0.0001f) return;
+
+            float angle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
             AimAngle.Value = angle;
             ApplyRotation(angle);
         }
 
         private void OnAimAngleChanged(float oldValue, float newValue)
         {
-            // Remote clients apply rotation when the NetworkVariable updates
-            if (!IsOwner)
-                ApplyRotation(newValue);
+            if (!IsOwner) ApplyRotation(newValue);
         }
 
         private void ApplyRotation(float angleDeg)
         {
-            if (weaponPivot != null)
-            {
-                weaponPivot.rotation = Quaternion.Euler(0f, 0f, angleDeg);
-            }
-            else
-            {
-                // Fallback: rotate the whole object
-                transform.rotation = Quaternion.Euler(0f, 0f, angleDeg);
-            }
+            Quaternion rot = Quaternion.Euler(0f, 0f, angleDeg);
+            if (weaponPivot != null) weaponPivot.rotation = rot;
+            else transform.rotation = rot;
         }
     }
 }

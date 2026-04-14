@@ -20,6 +20,8 @@ namespace FrentePartido.Networking
         private readonly List<ulong> _joinOrder = new List<ulong>();
         private NetworkGameState _gameState;
 
+        public GameObject PlayerPrefab => _playerPrefab;
+
         public override void OnNetworkSpawn()
         {
             if (!IsServer) return;

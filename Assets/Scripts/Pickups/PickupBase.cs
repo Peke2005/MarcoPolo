@@ -1,6 +1,7 @@
 using Unity.Netcode;
 using UnityEngine;
 using FrentePartido.Data;
+using FrentePartido.Core;
 
 namespace FrentePartido.Pickups
 {
@@ -23,11 +24,28 @@ namespace FrentePartido.Pickups
             _basePosition = transform.position;
             _bobOffset = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
 
+            if (_spriteRenderer == null) _spriteRenderer = GetComponentInChildren<SpriteRenderer>();
+            ApplyProceduralIcon();
+
             IsAvailable.OnValueChanged += (_, available) =>
             {
                 if (_spriteRenderer != null)
                     _spriteRenderer.enabled = available;
             };
+        }
+
+        private void ApplyProceduralIcon()
+        {
+            if (_spriteRenderer == null) return;
+            var sprite = PickupIconCache.Get(_type);
+            if (sprite != null)
+            {
+                _spriteRenderer.sprite = sprite;
+                _spriteRenderer.drawMode = SpriteDrawMode.Simple;
+                _spriteRenderer.transform.localScale = Vector3.one * 0.9f;
+                _spriteRenderer.sortingOrder = 6;
+                _spriteRenderer.color = Color.white;
+            }
         }
 
         private void Update()
@@ -58,8 +76,8 @@ namespace FrentePartido.Pickups
         [ClientRpc]
         private void PlayPickupEffectClientRpc()
         {
-            // Play pickup sound and particle effect
-            Debug.Log($"[Pickup] {_type} collected");
+            FxManager.PlayPickup(transform.position);
+            FxManager.SpawnExplosionRing(transform.position, 1.2f);
         }
 
         public void MakeAvailable()

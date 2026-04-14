@@ -27,7 +27,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 3.125, y: 3.125, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 6429092097375541194}
@@ -77,8 +77,8 @@ SpriteRenderer:
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
-  m_DrawMode: 1
-  m_Size: {x: 0.5, y: 0.5}
+  m_DrawMode: 0
+  m_Size: {x: 0.16, y: 0.16}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 1
@@ -207,7 +207,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  GlobalObjectIdHash: 1853398679
+  GlobalObjectIdHash: 1703882594
   InScenePlacedSourceGlobalObjectIdHash: 0
   AlwaysReplicateAsRoot: 0
   SynchronizeTransform: 1
@@ -263,7 +263,7 @@ MonoBehaviour:
     m_Name: 
     m_Type: 0
     m_ExpectedControlType: 
-    m_Id: 44013d42-45f1-4db8-8c9b-e4a23f8092cb
+    m_Id: e90d8a7f-38bb-422a-b5d5-a43f097eed0f
     m_Processors: 
     m_Interactions: 
     m_SingletonActionBindings: []
@@ -272,7 +272,7 @@ MonoBehaviour:
     m_Name: 
     m_Type: 0
     m_ExpectedControlType: 
-    m_Id: 9bba6aa9-dfaf-4012-9160-6cbe6579f0c6
+    m_Id: 7637b530-5072-48e2-b4b1-f5d5f5d3faf3
     m_Processors: 
     m_Interactions: 
     m_SingletonActionBindings: []
@@ -281,7 +281,7 @@ MonoBehaviour:
     m_Name: 
     m_Type: 0
     m_ExpectedControlType: 
-    m_Id: 8bb1c218-ad5e-48d1-a016-01aafc2f913d
+    m_Id: 780e6d09-1007-4403-9f56-ab4478d00055
     m_Processors: 
     m_Interactions: 
     m_SingletonActionBindings: []
@@ -290,7 +290,7 @@ MonoBehaviour:
     m_Name: 
     m_Type: 0
     m_ExpectedControlType: 
-    m_Id: 2ac56825-2a20-4738-aafb-9b8ec4794ae5
+    m_Id: a77e8667-d2ea-4f98-9fcb-91b875ba67fb
     m_Processors: 
     m_Interactions: 
     m_SingletonActionBindings: []
@@ -299,7 +299,7 @@ MonoBehaviour:
     m_Name: 
     m_Type: 0
     m_ExpectedControlType: 
-    m_Id: 5a6bc823-082f-49c7-bffd-a9bbaa659244
+    m_Id: f75d6778-069d-471c-b173-8c786f60d1c9
     m_Processors: 
     m_Interactions: 
     m_SingletonActionBindings: []
@@ -308,7 +308,7 @@ MonoBehaviour:
     m_Name: 
     m_Type: 0
     m_ExpectedControlType: 
-    m_Id: 791e47e2-f936-45c7-b97c-793377baa792
+    m_Id: e490b74c-a8cd-43d7-88d2-6f3c31e7ff49
     m_Processors: 
     m_Interactions: 
     m_SingletonActionBindings: []
@@ -317,7 +317,7 @@ MonoBehaviour:
     m_Name: 
     m_Type: 0
     m_ExpectedControlType: 
-    m_Id: 4884fc4f-b860-4d82-a13e-9267147d5f39
+    m_Id: 3aae4dba-0023-42ce-8209-92ed5e1d5321
     m_Processors: 
     m_Interactions: 
     m_SingletonActionBindings: []
@@ -539,7 +539,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0.4, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 1.25, y: 1.25, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 5003668703676015042}
@@ -589,8 +589,8 @@ SpriteRenderer:
   m_Color: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   m_FlipX: 0
   m_FlipY: 0
-  m_DrawMode: 1
-  m_Size: {x: 0.2, y: 0.2}
+  m_DrawMode: 0
+  m_Size: {x: 0.16, y: 0.16}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 1

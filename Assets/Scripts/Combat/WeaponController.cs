@@ -4,6 +4,7 @@ using Unity.Netcode;
 using UnityEngine;
 using FrentePartido.Data;
 using FrentePartido.Player;
+using FrentePartido.Core;
 
 namespace FrentePartido.Combat
 {
@@ -49,6 +50,10 @@ namespace FrentePartido.Combat
 
             if (firePoint == null)
                 firePoint = transform;
+
+            // Layer defaults: if unset in prefab, hit everything except this player.
+            if (hitLayers.value == 0) hitLayers = ~0;
+            if (obstacleLayer.value == 0) obstacleLayer = ~0;
         }
 
         public override void OnNetworkSpawn()
@@ -210,7 +215,7 @@ namespace FrentePartido.Combat
                 }
             }
 
-            // Spawn muzzle flash
+            // Spawn muzzle flash (configured prefab or procedural fallback)
             if (weaponData != null && weaponData.muzzleFlashPrefab != null)
             {
                 GameObject flash = Instantiate(
@@ -220,11 +225,25 @@ namespace FrentePartido.Combat
                 );
                 Destroy(flash, 0.15f);
             }
-
-            // Play fire sound
-            if (weaponData != null && weaponData.fireSound != null)
+            else
             {
+                FxManager.SpawnMuzzleFlash(firePoint.position, direction);
+            }
+
+            // Play fire sound (configured clip or procedural fallback)
+            if (weaponData != null && weaponData.fireSound != null)
                 AudioSource.PlayClipAtPoint(weaponData.fireSound, origin);
+            else
+                FxManager.PlayGunshot(origin);
+
+            // Client-side hit spark via visual raycast (approximation of server hit)
+            float range = weaponData != null ? weaponData.range : 15f;
+            RaycastHit2D visHit = Physics2D.Raycast(origin, direction, range);
+            if (visHit.collider != null)
+            {
+                FxManager.SpawnHitSpark(visHit.point);
+                if (visHit.collider.GetComponentInParent<PlayerHealth>() != null)
+                    FxManager.PlayHit(visHit.point, 0.4f);
             }
         }
 

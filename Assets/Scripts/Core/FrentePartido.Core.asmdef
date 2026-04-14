@@ -5,7 +5,8 @@
         "FrentePartido.Data",
         "Unity.Netcode.Runtime",
         "Unity.Services.Core",
-        "Unity.Services.Authentication"
+        "Unity.Services.Authentication",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

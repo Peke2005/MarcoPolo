@@ -3,6 +3,7 @@ using Unity.Netcode;
 using UnityEngine;
 using FrentePartido.Data;
 using FrentePartido.Player;
+using FrentePartido.Core;
 
 namespace FrentePartido.Combat
 {
@@ -48,6 +49,9 @@ namespace FrentePartido.Combat
 
             if (spriteRenderer == null)
                 spriteRenderer = GetComponent<SpriteRenderer>();
+
+            if (damageableLayers.value == 0) damageableLayers = ~0;
+            if (obstacleLayer.value == 0) obstacleLayer = ~0;
         }
 
         public override void OnNetworkSpawn()
@@ -164,18 +168,23 @@ namespace FrentePartido.Combat
         [ClientRpc]
         private void ExplodeClientRpc(Vector2 position)
         {
-            // Spawn explosion effect
+            // Spawn explosion effect (configured prefab or procedural fallback)
             if (explosionEffectPrefab != null)
             {
                 GameObject fx = Instantiate(explosionEffectPrefab, position, Quaternion.identity);
                 Destroy(fx, 2f);
             }
-
-            // Play explosion sound
-            if (explosionSound != null)
+            else
             {
-                AudioSource.PlayClipAtPoint(explosionSound, position);
+                float radius = balanceData != null ? balanceData.grenadeRadius : 2.5f;
+                FxManager.SpawnExplosionRing(position, radius);
             }
+
+            // Play explosion sound (configured clip or procedural fallback)
+            if (explosionSound != null)
+                AudioSource.PlayClipAtPoint(explosionSound, position);
+            else
+                FxManager.PlayExplosion(position);
 
             // Hide grenade sprite immediately on all clients
             if (spriteRenderer != null)

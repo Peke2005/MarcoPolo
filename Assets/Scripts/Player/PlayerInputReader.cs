@@ -42,6 +42,67 @@ namespace FrentePartido.Player
         private void Awake()
         {
             _mainCamera = Camera.main;
+            EnsureDefaultBindings();
+        }
+
+        private void EnsureDefaultBindings()
+        {
+            if (moveAction == null) moveAction = new InputAction("Move", InputActionType.Value, expectedControlType: "Vector2");
+            if (moveAction.bindings.Count == 0)
+            {
+                moveAction.AddCompositeBinding("2DVector")
+                    .With("Up", "<Keyboard>/w")
+                    .With("Down", "<Keyboard>/s")
+                    .With("Left", "<Keyboard>/a")
+                    .With("Right", "<Keyboard>/d");
+                moveAction.AddCompositeBinding("2DVector")
+                    .With("Up", "<Keyboard>/upArrow")
+                    .With("Down", "<Keyboard>/downArrow")
+                    .With("Left", "<Keyboard>/leftArrow")
+                    .With("Right", "<Keyboard>/rightArrow");
+                moveAction.AddBinding("<Gamepad>/leftStick");
+            }
+
+            if (lookAction == null) lookAction = new InputAction("Look", InputActionType.Value, expectedControlType: "Vector2");
+            if (lookAction.bindings.Count == 0)
+                lookAction.AddBinding("<Mouse>/position");
+
+            if (fireAction == null) fireAction = new InputAction("Fire", InputActionType.Button);
+            if (fireAction.bindings.Count == 0)
+            {
+                fireAction.AddBinding("<Mouse>/leftButton");
+                fireAction.AddBinding("<Gamepad>/rightTrigger");
+            }
+
+            if (reloadAction == null) reloadAction = new InputAction("Reload", InputActionType.Button);
+            if (reloadAction.bindings.Count == 0)
+            {
+                reloadAction.AddBinding("<Keyboard>/r");
+                reloadAction.AddBinding("<Gamepad>/buttonWest");
+            }
+
+            if (grenadeAction == null) grenadeAction = new InputAction("Grenade", InputActionType.Button);
+            if (grenadeAction.bindings.Count == 0)
+            {
+                grenadeAction.AddBinding("<Keyboard>/g");
+                grenadeAction.AddBinding("<Mouse>/rightButton");
+                grenadeAction.AddBinding("<Gamepad>/leftTrigger");
+            }
+
+            if (abilityAction == null) abilityAction = new InputAction("Ability", InputActionType.Button);
+            if (abilityAction.bindings.Count == 0)
+            {
+                abilityAction.AddBinding("<Keyboard>/q");
+                abilityAction.AddBinding("<Keyboard>/space");
+                abilityAction.AddBinding("<Gamepad>/buttonEast");
+            }
+
+            if (pauseAction == null) pauseAction = new InputAction("Pause", InputActionType.Button);
+            if (pauseAction.bindings.Count == 0)
+            {
+                pauseAction.AddBinding("<Keyboard>/escape");
+                pauseAction.AddBinding("<Gamepad>/start");
+            }
         }
 
         private void OnEnable()
@@ -110,22 +171,63 @@ namespace FrentePartido.Player
                 return;
             }
 
-            // Read movement
-            if (moveAction != null)
+            Vector2 move = Vector2.zero;
+            if (moveAction != null && moveAction.enabled)
+                move = moveAction.ReadValue<Vector2>();
+
+            // Fallback: read Keyboard.current directly (works even if InputAction failed to bind).
+            var kb = Keyboard.current;
+            if (kb != null && move.sqrMagnitude < 0.01f)
             {
-                MoveInput = moveAction.ReadValue<Vector2>();
-                if (MoveInput.sqrMagnitude > 0.01f)
-                    OnMoveInput?.Invoke(MoveInput);
+                if (kb.wKey.isPressed || kb.upArrowKey.isPressed) move.y += 1f;
+                if (kb.sKey.isPressed || kb.downArrowKey.isPressed) move.y -= 1f;
+                if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) move.x += 1f;
+                if (kb.aKey.isPressed || kb.leftArrowKey.isPressed) move.x -= 1f;
             }
+            var pad = Gamepad.current;
+            if (pad != null && move.sqrMagnitude < 0.01f)
+                move = pad.leftStick.ReadValue();
+
+            MoveInput = move;
+            if (move.sqrMagnitude > 0.01f)
+                OnMoveInput?.Invoke(move);
 
             // Convert mouse screen position to world position
-            if (lookAction != null && _mainCamera != null)
+            if (_mainCamera == null) _mainCamera = Camera.main;
+            if (_mainCamera != null)
             {
-                Vector2 screenPos = lookAction.ReadValue<Vector2>();
+                Vector2 screenPos = Vector2.zero;
+                if (lookAction != null && lookAction.enabled)
+                    screenPos = lookAction.ReadValue<Vector2>();
+                if (screenPos == Vector2.zero && Mouse.current != null)
+                    screenPos = Mouse.current.position.ReadValue();
+
                 Vector3 worldPos = _mainCamera.ScreenToWorldPoint(
                     new Vector3(screenPos.x, screenPos.y, -_mainCamera.transform.position.z));
                 AimWorldPosition = new Vector2(worldPos.x, worldPos.y);
             }
+
+            // Fallback button events ONLY if the corresponding InputAction failed to bind/enable.
+            bool fireOk = fireAction != null && fireAction.enabled && fireAction.bindings.Count > 0;
+            bool reloadOk = reloadAction != null && reloadAction.enabled && reloadAction.bindings.Count > 0;
+            bool grenadeOk = grenadeAction != null && grenadeAction.enabled && grenadeAction.bindings.Count > 0;
+            bool abilityOk = abilityAction != null && abilityAction.enabled && abilityAction.bindings.Count > 0;
+            bool pauseOk = pauseAction != null && pauseAction.enabled && pauseAction.bindings.Count > 0;
+
+            if (kb != null)
+            {
+                if (!reloadOk && kb.rKey.wasPressedThisFrame) OnReloadPressed?.Invoke();
+                if (!grenadeOk && kb.gKey.wasPressedThisFrame) OnGrenadePressed?.Invoke();
+                if (!abilityOk && (kb.qKey.wasPressedThisFrame || kb.spaceKey.wasPressedThisFrame)) OnAbilityPressed?.Invoke();
+                if (!pauseOk && kb.escapeKey.wasPressedThisFrame) OnPausePressed?.Invoke();
+            }
+            if (!fireOk && Mouse.current != null)
+            {
+                if (Mouse.current.leftButton.wasPressedThisFrame) OnFirePressed?.Invoke();
+                if (Mouse.current.leftButton.wasReleasedThisFrame) OnFireReleased?.Invoke();
+            }
+            if (!grenadeOk && Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame)
+                OnGrenadePressed?.Invoke();
         }
 
         private void HandleFireStarted(InputAction.CallbackContext ctx)

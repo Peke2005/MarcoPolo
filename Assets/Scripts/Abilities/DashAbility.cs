@@ -28,6 +28,7 @@ namespace FrentePartido.Abilities
         private void Awake()
         {
             _spriteRenderer = GetComponentInChildren<SpriteRenderer>();
+            if (wallLayer.value == 0) wallLayer = ~0;
         }
 
         /// <summary>

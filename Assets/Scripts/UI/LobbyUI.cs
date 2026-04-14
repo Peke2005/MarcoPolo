@@ -51,19 +51,21 @@ namespace FrentePartido.UI
         private float _copyTimer;
 
         // ── Theme ───────────────────────────────────────────
-        static readonly Color BG        = c(0.08f, 0.09f, 0.12f);
-        static readonly Color CARD      = c(0.13f, 0.14f, 0.18f);
+        static readonly Color BG        = c(0.06f, 0.07f, 0.10f);
+        static readonly Color CARD      = c(0.14f, 0.16f, 0.21f);
         static readonly Color CARD_WAIT = c(0.10f, 0.11f, 0.14f);
-        static readonly Color BLUE      = c(0.25f, 0.50f, 0.95f);
-        static readonly Color RED       = c(0.90f, 0.28f, 0.28f);
-        static readonly Color GREEN     = c(0.20f, 0.78f, 0.40f);
+        static readonly Color BLUE      = c(0.25f, 0.52f, 0.96f);
+        static readonly Color RED       = c(0.92f, 0.30f, 0.30f);
+        static readonly Color GREEN     = c(0.22f, 0.80f, 0.42f);
         static readonly Color YELLOW    = c(1.00f, 0.82f, 0.18f);
-        static readonly Color TXT       = c(0.92f, 0.93f, 0.96f);
-        static readonly Color TXT2      = c(0.55f, 0.58f, 0.65f);
-        static readonly Color MUTED     = c(0.38f, 0.40f, 0.46f);
-        static readonly Color BTN       = c(0.18f, 0.19f, 0.24f);
-        static readonly Color DANGER    = c(0.65f, 0.18f, 0.18f);
-        static readonly Color CODE_BG   = c(0.14f, 0.15f, 0.20f);
+        static readonly Color TXT       = c(0.95f, 0.96f, 0.98f);
+        static readonly Color TXT2      = c(0.62f, 0.65f, 0.72f);
+        static readonly Color MUTED     = c(0.42f, 0.45f, 0.52f);
+        static readonly Color BTN       = c(0.20f, 0.22f, 0.28f);
+        static readonly Color BTN_HOVER = c(0.26f, 0.28f, 0.34f);
+        static readonly Color DANGER    = c(0.70f, 0.22f, 0.22f);
+        static readonly Color CODE_BG   = c(0.16f, 0.18f, 0.24f);
+        static readonly Color ACCENT    = c(1.00f, 0.82f, 0.18f);
         static Color c(float r, float g, float b) => new Color(r, g, b);
 
         // ── Ability Data ────────────────────────────────────
@@ -139,9 +141,9 @@ namespace FrentePartido.UI
 
             // Main container
             var main = Panel("Main", bg.transform, Color.clear);
-            Anchors(main, 0.03f, 0.02f, 0.97f, 0.98f);
+            Anchors(main, 0.04f, 0.03f, 0.96f, 0.97f);
             var vl = main.gameObject.AddComponent<VerticalLayoutGroup>();
-            vl.spacing = 10; vl.padding = new RectOffset(8, 8, 4, 4);
+            vl.spacing = 16; vl.padding = new RectOffset(12, 12, 8, 8);
             vl.childForceExpandWidth = true; vl.childForceExpandHeight = false;
             vl.childControlWidth = true; vl.childControlHeight = false;
 
@@ -155,47 +157,49 @@ namespace FrentePartido.UI
 
         void BuildHeader(Transform p)
         {
-            var row = LayoutRow("Header", p, 75);
+            var row = LayoutRow("Header", p, 95);
 
-            // Left: title
-            var titleTxt = Txt("Title", row.transform, "SALA DE ESPERA", 26, FontStyles.Bold, TXT);
-            Anchors(titleTxt, 0, 0.45f, 0.5f, 1f);
+            // Title block
+            var titleTxt = Txt("Title", row.transform, "SALA DE ESPERA", 30, FontStyles.Bold, TXT);
+            Anchors(titleTxt, 0, 0.5f, 0.55f, 1f);
             titleTxt.alignment = TextAlignmentOptions.BottomLeft;
+            titleTxt.characterSpacing = 3;
 
-            var sub = Txt("Sub", row.transform, "Prepara tu loadout y espera a tu rival", 13, FontStyles.Normal, TXT2);
-            Anchors(sub, 0, 0, 0.5f, 0.45f);
+            var sub = Txt("Sub", row.transform, "Configura tu loadout", 13, FontStyles.Normal, TXT2);
+            Anchors(sub, 0, 0, 0.55f, 0.5f);
             sub.alignment = TextAlignmentOptions.TopLeft;
 
-            // Right: code box
+            // Code box
             var codeBox = Panel("CodeBox", row.transform, CODE_BG);
             Anchors(codeBox, 0.55f, 0.05f, 1f, 0.95f);
 
-            var codeLabel = Txt("CLabel", codeBox.transform, "CODIGO DE SALA", 9, FontStyles.Bold, MUTED);
-            Anchors(codeLabel, 0.05f, 0.7f, 0.95f, 0.95f);
+            var codeLabel = Txt("CLabel", codeBox.transform, "CÓDIGO DE SALA", 10, FontStyles.Bold, MUTED);
+            Anchors(codeLabel, 0.05f, 0.72f, 0.95f, 0.96f);
             codeLabel.alignment = TextAlignmentOptions.Left;
+            codeLabel.characterSpacing = 3;
 
-            _joinCodeText = Txt("Code", codeBox.transform, "------", 24, FontStyles.Bold, YELLOW);
-            Anchors(_joinCodeText, 0.05f, 0.1f, 0.72f, 0.7f);
-            _joinCodeText.alignment = TextAlignmentOptions.Center;
-            _joinCodeText.characterSpacing = 5;
+            _joinCodeText = Txt("Code", codeBox.transform, "------", 28, FontStyles.Bold, YELLOW);
+            Anchors(_joinCodeText, 0.05f, 0.08f, 0.70f, 0.72f);
+            _joinCodeText.alignment = TextAlignmentOptions.Left;
+            _joinCodeText.characterSpacing = 8;
 
             // Copy btn
             var copyBg = Panel("CopyBg", codeBox.transform, BTN);
-            Anchors(copyBg, 0.75f, 0.15f, 0.95f, 0.65f);
+            Anchors(copyBg, 0.72f, 0.15f, 0.95f, 0.65f);
             _copyCodeButton = copyBg.gameObject.AddComponent<Button>();
-            var copyTxt = Txt("CopyTxt", copyBg.transform, "COPIAR", 10, FontStyles.Bold, TXT);
+            var copyTxt = Txt("CopyTxt", copyBg.transform, "COPIAR", 11, FontStyles.Bold, TXT);
             Stretch(copyTxt); copyTxt.alignment = TextAlignmentOptions.Center;
 
-            _copyFeedbackText = Txt("Feedback", codeBox.transform, "Copiado!", 10, FontStyles.Italic, GREEN);
-            Anchors(_copyFeedbackText, 0.72f, 0.68f, 1f, 0.95f);
-            _copyFeedbackText.alignment = TextAlignmentOptions.Center;
+            _copyFeedbackText = Txt("Feedback", codeBox.transform, "¡Copiado!", 10, FontStyles.Italic, GREEN);
+            Anchors(_copyFeedbackText, 0.70f, 0.68f, 0.98f, 0.95f);
+            _copyFeedbackText.alignment = TextAlignmentOptions.Right;
         }
 
         // ── PLAYERS ─────────────────────────────────────────
 
         void BuildPlayers(Transform p)
         {
-            var section = LayoutRow("Players", p, 120);
+            var section = LayoutRow("Players", p, 140);
 
             var label = Txt("PLabel", section.transform, "JUGADORES", 10, FontStyles.Bold, MUTED);
             Anchors(label, 0, 0.9f, 1, 1); label.alignment = TextAlignmentOptions.BottomLeft;
@@ -228,29 +232,33 @@ namespace FrentePartido.UI
             var card = Panel($"{id}Card", p, isLocal ? CARD : CARD_WAIT);
             cardBg = card.GetComponent<Image>();
 
+            // Colored side stripe
+            var stripe = Panel($"{id}Stripe", card.transform, isLocal ? BLUE : RED);
+            Anchors(stripe, 0f, 0f, 0.04f, 1f);
+
             // Badge
             var badge = Panel($"{id}Badge", card.transform, isLocal ? BLUE : RED);
-            Anchors(badge, 0.05f, 0.72f, 0.22f, 0.9f);
+            Anchors(badge, 0.08f, 0.70f, 0.28f, 0.92f);
             var badgeTxt = Txt($"{id}BT", badge.transform, isLocal ? "P1" : "P2",
-                11, FontStyles.Bold, Color.white);
+                13, FontStyles.Bold, Color.white);
             Stretch(badgeTxt); badgeTxt.alignment = TextAlignmentOptions.Center;
 
             // Status dot
             var dot = Panel($"{id}Dot", card.transform, isLocal ? GREEN : MUTED);
-            Anchors(dot, 0.85f, 0.75f, 0.93f, 0.87f);
+            Anchors(dot, 0.88f, 0.78f, 0.95f, 0.90f);
 
             // Name
             nameT = Txt($"{id}Name", card.transform,
                 isLocal ? "Jugador 1" : "Esperando rival...",
-                17, FontStyles.Bold, isLocal ? TXT : TXT2);
-            Anchors(nameT, 0.05f, 0.35f, 0.95f, 0.68f);
+                19, FontStyles.Bold, isLocal ? TXT : TXT2);
+            Anchors(nameT, 0.08f, 0.36f, 0.95f, 0.66f);
             nameT.alignment = TextAlignmentOptions.Left;
 
             // Status
             statusT = Txt($"{id}Status", card.transform,
-                isLocal ? "Conectado" : "",
-                12, FontStyles.Normal, isLocal ? GREEN : TXT2);
-            Anchors(statusT, 0.05f, 0.08f, 0.95f, 0.35f);
+                isLocal ? "● Conectado" : "— sin conexión",
+                12, FontStyles.Normal, isLocal ? GREEN : MUTED);
+            Anchors(statusT, 0.08f, 0.08f, 0.95f, 0.34f);
             statusT.alignment = TextAlignmentOptions.Left;
         }
 
@@ -258,7 +266,7 @@ namespace FrentePartido.UI
 
         void BuildLoadout(Transform p)
         {
-            var section = LayoutRow("Loadout", p, 175);
+            var section = LayoutRow("Loadout", p, 210);
             var cols = Panel("Cols", section.transform, Color.clear);
             Stretch(cols);
             var hl = cols.gameObject.AddComponent<HorizontalLayoutGroup>();
@@ -273,14 +281,16 @@ namespace FrentePartido.UI
         {
             var panel = Panel("AbPanel", p, CARD);
 
-            var title = Txt("AbTitle", panel.transform, "HABILIDAD", 10, FontStyles.Bold, MUTED);
-            Anchors(title, 0.05f, 0.88f, 0.95f, 0.98f); title.alignment = TextAlignmentOptions.Left;
+            var title = Txt("AbTitle", panel.transform, "HABILIDAD", 11, FontStyles.Bold, MUTED);
+            Anchors(title, 0.06f, 0.89f, 0.95f, 0.99f);
+            title.alignment = TextAlignmentOptions.Left;
+            title.characterSpacing = 3;
 
             // Buttons row
             var row = Panel("AbRow", panel.transform, Color.clear);
-            Anchors(row, 0.04f, 0.52f, 0.96f, 0.85f);
+            Anchors(row, 0.05f, 0.48f, 0.95f, 0.87f);
             var hl = row.gameObject.AddComponent<HorizontalLayoutGroup>();
-            hl.spacing = 8; hl.childForceExpandWidth = true; hl.childForceExpandHeight = true;
+            hl.spacing = 10; hl.childForceExpandWidth = true; hl.childForceExpandHeight = true;
             hl.childControlWidth = true; hl.childControlHeight = true;
 
             _abilityHighlights = new Image[3];
@@ -288,16 +298,19 @@ namespace FrentePartido.UI
             _shieldButton = AbilityBtn(row.transform, "Shield", AB_ICON[1], 1);
             _mineButton   = AbilityBtn(row.transform, "Mine",   AB_ICON[2], 2);
 
-            // Info
-            _selectedAbilityText = Txt("AbName", panel.transform, AB_ICON[0] + " " + AB_NAME[0],
-                15, FontStyles.Bold, TXT);
-            Anchors(_selectedAbilityText, 0.05f, 0.25f, 0.95f, 0.5f);
+            // Info strip
+            var infoBg = Panel("AbInfo", panel.transform, c(0.10f, 0.11f, 0.14f));
+            Anchors(infoBg, 0.05f, 0.06f, 0.95f, 0.44f);
+
+            _selectedAbilityText = Txt("AbName", infoBg.transform, AB_ICON[0] + "  " + AB_NAME[0],
+                16, FontStyles.Bold, YELLOW);
+            Anchors(_selectedAbilityText, 0.04f, 0.52f, 0.96f, 0.95f);
             _selectedAbilityText.alignment = TextAlignmentOptions.Left;
 
-            _selectedAbilityDesc = Txt("AbDesc", panel.transform, AB_DESC[0],
+            _selectedAbilityDesc = Txt("AbDesc", infoBg.transform, AB_DESC[0],
                 12, FontStyles.Normal, TXT2);
-            Anchors(_selectedAbilityDesc, 0.05f, 0.05f, 0.95f, 0.25f);
-            _selectedAbilityDesc.alignment = TextAlignmentOptions.Left;
+            Anchors(_selectedAbilityDesc, 0.04f, 0.08f, 0.96f, 0.52f);
+            _selectedAbilityDesc.alignment = TextAlignmentOptions.TopLeft;
         }
 
         Button AbilityBtn(Transform p, string name, string icon, int idx)
@@ -306,11 +319,11 @@ namespace FrentePartido.UI
             _abilityHighlights[idx] = bg.GetComponent<Image>();
             var btn = bg.gameObject.AddComponent<Button>();
 
-            var label = Txt($"{name}Lbl", bg.transform, icon, 18, FontStyles.Bold, TXT);
-            Anchors(label, 0, 0.35f, 1, 0.95f); label.alignment = TextAlignmentOptions.Center;
+            var label = Txt($"{name}Lbl", bg.transform, icon, 24, FontStyles.Bold, TXT);
+            Anchors(label, 0, 0.42f, 1, 0.96f); label.alignment = TextAlignmentOptions.Center;
 
-            var sub = Txt($"{name}Sub", bg.transform, AB_NAME[idx], 8, FontStyles.Normal, TXT2);
-            Anchors(sub, 0, 0.02f, 1, 0.35f); sub.alignment = TextAlignmentOptions.Center;
+            var sub = Txt($"{name}Sub", bg.transform, AB_NAME[idx], 10, FontStyles.Bold, TXT2);
+            Anchors(sub, 0.05f, 0.05f, 0.95f, 0.42f); sub.alignment = TextAlignmentOptions.Center;
 
             return btn;
         }
@@ -318,35 +331,41 @@ namespace FrentePartido.UI
         void BuildFaction(Transform p)
         {
             var panel = Panel("FacPanel", p, CARD);
-            panel.gameObject.AddComponent<LayoutElement>().flexibleWidth = 0.4f;
+            panel.gameObject.AddComponent<LayoutElement>().flexibleWidth = 0.45f;
 
-            var title = Txt("FTitle", panel.transform, "EQUIPO", 10, FontStyles.Bold, MUTED);
-            Anchors(title, 0.08f, 0.88f, 0.92f, 0.98f); title.alignment = TextAlignmentOptions.Left;
+            var title = Txt("FTitle", panel.transform, "EQUIPO", 11, FontStyles.Bold, MUTED);
+            Anchors(title, 0.08f, 0.89f, 0.92f, 0.99f);
+            title.alignment = TextAlignmentOptions.Left;
+            title.characterSpacing = 3;
 
             // Blue
             var blBg = Panel("BlBtn", panel.transform, BLUE);
-            Anchors(blBg, 0.08f, 0.52f, 0.92f, 0.83f);
+            Anchors(blBg, 0.08f, 0.50f, 0.92f, 0.85f);
             _blueButton = blBg.gameObject.AddComponent<Button>();
-            var blTxt = Txt("BlTxt", blBg.transform, "AZUL", 16, FontStyles.Bold, Color.white);
+            var blTxt = Txt("BlTxt", blBg.transform, "AZUL", 18, FontStyles.Bold, Color.white);
             Stretch(blTxt); blTxt.alignment = TextAlignmentOptions.Center;
-            _blueHighlight = Panel("BlHL", blBg.transform, new Color(1, 1, 1, 0.25f)).GetComponent<Image>();
-            Stretch(_blueHighlight);
+            blTxt.characterSpacing = 4;
+            _blueHighlight = Panel("BlHL", blBg.transform, new Color(1, 1, 1, 0f)).GetComponent<Image>();
+            Anchors(_blueHighlight, 0f, 0f, 1f, 0.08f);
+            _blueHighlight.color = YELLOW;
 
             // Red
             var rdBg = Panel("RdBtn", panel.transform, RED);
-            Anchors(rdBg, 0.08f, 0.13f, 0.92f, 0.44f);
+            Anchors(rdBg, 0.08f, 0.10f, 0.92f, 0.45f);
             _redButton = rdBg.gameObject.AddComponent<Button>();
-            var rdTxt = Txt("RdTxt", rdBg.transform, "ROJO", 16, FontStyles.Bold, Color.white);
+            var rdTxt = Txt("RdTxt", rdBg.transform, "ROJO", 18, FontStyles.Bold, Color.white);
             Stretch(rdTxt); rdTxt.alignment = TextAlignmentOptions.Center;
-            _redHighlight = Panel("RdHL", rdBg.transform, new Color(1, 1, 1, 0.25f)).GetComponent<Image>();
-            Stretch(_redHighlight);
+            rdTxt.characterSpacing = 4;
+            _redHighlight = Panel("RdHL", rdBg.transform, new Color(1, 1, 1, 0f)).GetComponent<Image>();
+            Anchors(_redHighlight, 0f, 0f, 1f, 0.08f);
+            _redHighlight.color = YELLOW;
         }
 
         // ── ACTIONS ─────────────────────────────────────────
 
         void BuildActions(Transform p)
         {
-            var section = LayoutRow("Actions", p, 52);
+            var section = LayoutRow("Actions", p, 62);
             var row = Panel("ARow", section.transform, Color.clear);
             Stretch(row);
             var hl = row.gameObject.AddComponent<HorizontalLayoutGroup>();
@@ -514,9 +533,9 @@ namespace FrentePartido.UI
         void CheckStartCondition()
         {
             if (_startGameButton == null) return;
-            bool ok = Unity.Netcode.NetworkManager.Singleton != null &&
-                      Unity.Netcode.NetworkManager.Singleton.ConnectedClientsIds.Count >= 2;
-            _startGameButton.interactable = ok;
+            bool hasNet = Unity.Netcode.NetworkManager.Singleton != null &&
+                          Unity.Netcode.NetworkManager.Singleton.IsListening;
+            _startGameButton.interactable = hasNet;
         }
 
         // ════════════════════════════════════════════════════

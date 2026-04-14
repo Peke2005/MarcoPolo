@@ -5,6 +5,7 @@
         "FrentePartido.Data",
         "FrentePartido.Player",
         "FrentePartido.Combat",
+        "FrentePartido.Core",
         "Unity.Netcode.Runtime"
     ],
     "includePlatforms": [],

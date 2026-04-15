@@ -16,12 +16,26 @@ namespace FrentePartido.Networking
     {
         public static NetworkSessionManager Instance { get; private set; }
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void EnsureInstance()
         {
             if (Instance != null) return;
 
-            var go = new GameObject("NetworkSessionManager");
+            var existingSessionManager = FindFirstObjectByType<NetworkSessionManager>();
+            if (existingSessionManager != null)
+            {
+                Instance = existingSessionManager;
+                return;
+            }
+
+            var existingNetworkManager = NetworkManager.Singleton ?? FindFirstObjectByType<NetworkManager>();
+            if (existingNetworkManager != null)
+            {
+                existingNetworkManager.gameObject.AddComponent<NetworkSessionManager>();
+                return;
+            }
+
+            var go = new GameObject("NetworkManager");
             var transport = go.AddComponent<UnityTransport>();
             var netManager = go.AddComponent<NetworkManager>();
             netManager.NetworkConfig = new NetworkConfig
@@ -29,6 +43,8 @@ namespace FrentePartido.Networking
                 NetworkTransport = transport
             };
             go.AddComponent<NetworkSessionManager>();
+
+            Debug.LogWarning("[Session] No NetworkManager found in first loaded scene. Created runtime fallback NetworkManager.");
         }
 
         public string JoinCode { get; private set; }
@@ -60,9 +76,54 @@ namespace FrentePartido.Networking
             _networkManager = GetComponent<NetworkManager>();
             if (_networkManager == null)
             {
-                _networkManager = gameObject.AddComponent<NetworkManager>();
-                Debug.LogWarning("[Session] NetworkManager was missing — added dynamically.");
+                _networkManager = NetworkManager.Singleton ?? FindFirstObjectByType<NetworkManager>();
+
+                if (_networkManager == null)
+                {
+                    _networkManager = gameObject.AddComponent<NetworkManager>();
+                    var transport = GetComponent<UnityTransport>() ?? gameObject.AddComponent<UnityTransport>();
+                    _networkManager.NetworkConfig = new NetworkConfig
+                    {
+                        NetworkTransport = transport
+                    };
+
+                    Debug.LogWarning("[Session] NetworkManager was missing. Created fallback NetworkManager + UnityTransport.");
+                }
             }
+        }
+
+        private bool EnsureNetworkConfigReady()
+        {
+            if (_networkManager == null)
+            {
+                Debug.LogError("[Session] NetworkManager reference is null.");
+                return false;
+            }
+
+            if (_networkManager.NetworkConfig == null)
+            {
+                _networkManager.NetworkConfig = new NetworkConfig();
+            }
+
+            if (_networkManager.NetworkConfig.NetworkTransport == null)
+            {
+                var transport = _networkManager.GetComponent<UnityTransport>();
+                if (transport == null)
+                {
+                    Debug.LogError("[Session] UnityTransport is missing on NetworkManager.");
+                    return false;
+                }
+
+                _networkManager.NetworkConfig.NetworkTransport = transport;
+                Debug.LogWarning("[Session] NetworkTransport was null in NetworkConfig. Assigned UnityTransport automatically.");
+            }
+
+            if (_networkManager.NetworkConfig.Prefabs.NetworkPrefabsLists.Count == 0)
+            {
+                Debug.LogWarning("[Session] NetworkPrefabsLists is empty. Spawned NetworkObjects may fail on clients.");
+            }
+
+            return true;
         }
 
         private void OnEnable()
@@ -107,6 +168,11 @@ namespace FrentePartido.Networking
                 if (!ServiceInitializer.IsInitialized)
                 {
                     await ServiceInitializer.InitializeAsync();
+                }
+
+                if (!EnsureNetworkConfigReady())
+                {
+                    return;
                 }
 
                 // 1. Relay allocation
@@ -156,6 +222,11 @@ namespace FrentePartido.Networking
                 if (!ServiceInitializer.IsInitialized)
                 {
                     await ServiceInitializer.InitializeAsync();
+                }
+
+                if (!EnsureNetworkConfigReady())
+                {
+                    return;
                 }
 
                 // 1. Join Relay allocation

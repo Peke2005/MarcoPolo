@@ -137,7 +137,6 @@ namespace FrentePartido.Networking
         {
             if (_currentLobby == null)
             {
-                Debug.LogWarning("[Lobby] Cannot update player data — not in a lobby.");
                 return;
             }
 

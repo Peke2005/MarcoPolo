@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using FrentePartido.Core;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -7,9 +8,6 @@ namespace FrentePartido.Auth
 {
     public static class AuthService
     {
-        // Cambiar a la IP de tu máquina si pruebas en otro dispositivo
-        private const string BASE_URL = "http://localhost:3001";
-
         public static string Token { get; private set; }
         public static string Username { get; private set; }
         public static string DisplayName { get; private set; }
@@ -57,7 +55,7 @@ namespace FrentePartido.Auth
 
             try
             {
-                using var request = UnityWebRequest.Get($"{BASE_URL}/auth/verify");
+                using var request = UnityWebRequest.Get($"{GetBaseUrl()}/auth/verify");
                 request.SetRequestHeader("Authorization", $"Bearer {savedToken}");
                 request.SetRequestHeader("Content-Type", "application/json");
 
@@ -87,7 +85,7 @@ namespace FrentePartido.Auth
         {
             try
             {
-                using var request = new UnityWebRequest($"{BASE_URL}{endpoint}", "POST");
+                using var request = new UnityWebRequest($"{GetBaseUrl()}{endpoint}", "POST");
                 byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(jsonBody);
                 request.uploadHandler = new UploadHandlerRaw(bodyRaw);
                 request.downloadHandler = new DownloadHandlerBuffer();
@@ -99,7 +97,7 @@ namespace FrentePartido.Auth
                 if (request.result != UnityWebRequest.Result.Success)
                 {
                     var errorResp = JsonUtility.FromJson<ErrorResponse>(request.downloadHandler.text);
-                    return new AuthResult { success = false, error = errorResp?.error ?? "Error de conexión" };
+                    return new AuthResult { success = false, error = errorResp?.error ?? "Error de conexion" };
                 }
 
                 var response = JsonUtility.FromJson<AuthResponse>(request.downloadHandler.text);
@@ -115,11 +113,21 @@ namespace FrentePartido.Auth
             }
             catch (Exception e)
             {
-                return new AuthResult { success = false, error = $"Sin conexión al servidor: {e.Message}" };
+                return new AuthResult { success = false, error = $"Sin conexion al servidor: {e.Message}" };
             }
         }
 
-        // ── Request/Response DTOs ──
+        private static string GetBaseUrl()
+        {
+            string configuredUrl = GameConfig.Preferences?.authBaseUrl;
+            if (string.IsNullOrWhiteSpace(configuredUrl))
+            {
+                configuredUrl = GameConfig.DEFAULT_AUTH_BASE_URL;
+            }
+
+            return configuredUrl.Trim().TrimEnd('/');
+        }
+
         [Serializable]
         private class LoginRequest
         {

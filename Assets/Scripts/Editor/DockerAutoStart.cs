@@ -57,7 +57,7 @@ namespace FrentePartido.Editor
         private static void StartBackend(string backendPath)
         {
             UnityEngine.Debug.Log("[DockerAutoStart] Starting auth backend...");
-            RunDockerCompose(backendPath, "up -d --build", "Auth backend running on http://localhost:3000");
+            RunDockerCompose(backendPath, "up -d --build", "Auth backend running on http://localhost:3001");
         }
 
         private static void RunDockerCompose(string workingDir, string args, string successMsg)

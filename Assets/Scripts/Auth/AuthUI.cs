@@ -1,7 +1,9 @@
+using System;
+using System.Threading.Tasks;
+using FrentePartido.Core;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-using TMPro;
-using FrentePartido.Core;
 
 namespace FrentePartido.Auth
 {
@@ -31,6 +33,7 @@ namespace FrentePartido.Auth
 
         private void Start()
         {
+            GameConfig.Load();
             SetupButtons();
             ShowLogin();
             TryAutoLogin();
@@ -38,24 +41,51 @@ namespace FrentePartido.Auth
 
         private void SetupButtons()
         {
-            _loginButton?.onClick.AddListener(OnLogin);
-            _registerButton?.onClick.AddListener(OnRegister);
-            _goToRegisterButton?.onClick.AddListener(ShowRegister);
-            _goToLoginButton?.onClick.AddListener(ShowLogin);
+            if (_loginButton != null)
+            {
+                _loginButton.onClick.RemoveAllListeners();
+                _loginButton.onClick.AddListener(OnLogin);
+            }
+
+            if (_registerButton != null)
+            {
+                _registerButton.onClick.RemoveAllListeners();
+                _registerButton.onClick.AddListener(OnRegister);
+            }
+
+            if (_goToRegisterButton != null)
+            {
+                _goToRegisterButton.onClick.RemoveAllListeners();
+                _goToRegisterButton.onClick.AddListener(ShowRegister);
+            }
+
+            if (_goToLoginButton != null)
+            {
+                _goToLoginButton.onClick.RemoveAllListeners();
+                _goToLoginButton.onClick.AddListener(ShowLogin);
+            }
         }
 
         private async void TryAutoLogin()
         {
-            SetLoading(true, "Verificando sesión...");
-            bool success = await AuthService.TryAutoLogin();
-
-            if (success)
+            try
             {
-                GoToMainMenu();
+                SetLoading(true, "Verificando sesion...");
+                bool success = await AuthService.TryAutoLogin();
+
+                if (success)
+                {
+                    await CompleteAuthFlow("Sesion recuperada. Entrando...");
+                }
+                else
+                {
+                    SetLoading(false);
+                }
             }
-            else
+            catch (Exception e)
             {
                 SetLoading(false);
+                ShowError($"No se pudo verificar la sesion: {e.Message}");
             }
         }
 
@@ -70,17 +100,25 @@ namespace FrentePartido.Auth
                 return;
             }
 
-            SetLoading(true, "Iniciando sesión...");
-            var result = await AuthService.Login(user, pass);
-
-            if (result.success)
+            try
             {
-                GoToMainMenu();
+                SetLoading(true, "Iniciando sesion...");
+                var result = await AuthService.Login(user, pass);
+
+                if (result.success)
+                {
+                    await CompleteAuthFlow("Sesion iniciada. Entrando...");
+                }
+                else
+                {
+                    SetLoading(false);
+                    ShowError(result.error);
+                }
             }
-            else
+            catch (Exception e)
             {
                 SetLoading(false);
-                ShowError(result.error);
+                ShowError($"Error al iniciar sesion: {e.Message}");
             }
         }
 
@@ -99,34 +137,62 @@ namespace FrentePartido.Auth
 
             if (pass.Length < 6)
             {
-                ShowError("La contraseña debe tener al menos 6 caracteres");
+                ShowError("La contrasena debe tener al menos 6 caracteres");
                 return;
             }
 
-            SetLoading(true, "Registrando...");
-            var result = await AuthService.Register(user, email, pass, displayName);
+            try
+            {
+                SetLoading(true, $"Registrando en {GameConfig.DEFAULT_AUTH_BASE_URL}...");
+                var result = await AuthService.Register(user, email, pass, displayName);
 
-            if (result.success)
-            {
-                GoToMainMenu();
-            }
-            else
-            {
+                if (result.success)
+                {
+                    await CompleteAuthFlow("Registro correcto. Entrando...");
+                    return;
+                }
+
+                if (LooksLikeExistingAccount(result.error))
+                {
+                    ShowInfo("La cuenta ya existe. Probando inicio de sesion...");
+                    var loginResult = await AuthService.Login(user, pass);
+                    if (loginResult.success)
+                    {
+                        await CompleteAuthFlow("Sesion iniciada. Entrando...");
+                        return;
+                    }
+                }
+
                 SetLoading(false);
                 ShowError(result.error);
             }
+            catch (Exception e)
+            {
+                SetLoading(false);
+                ShowError($"Error al registrar: {e.Message}");
+            }
         }
 
-        private void GoToMainMenu()
+        private async Task CompleteAuthFlow(string message)
         {
-            // Set display name in game config
-            if (!string.IsNullOrEmpty(AuthService.DisplayName))
+            try
             {
-                GameConfig.Preferences.playerName = AuthService.DisplayName;
-                GameConfig.Save();
-            }
+                ShowSuccess(message);
 
-            SceneFlowController.LoadScene(SceneFlowController.SCENE_MAIN_MENU);
+                if (!string.IsNullOrEmpty(AuthService.DisplayName))
+                {
+                    GameConfig.Preferences.playerName = AuthService.DisplayName;
+                }
+
+                GameConfig.Save();
+                await Task.Yield();
+                SceneFlowController.LoadScene(SceneFlowController.SCENE_MAIN_MENU);
+            }
+            catch (Exception e)
+            {
+                SetLoading(false);
+                ShowError($"No se pudo abrir el menu principal: {e.Message}");
+            }
         }
 
         private void ShowLogin()
@@ -148,7 +214,34 @@ namespace FrentePartido.Auth
             if (_loadingIndicator != null) _loadingIndicator.SetActive(loading);
             if (_loginButton != null) _loginButton.interactable = !loading;
             if (_registerButton != null) _registerButton.interactable = !loading;
-            if (_statusText != null) _statusText.text = message;
+
+            if (_statusText != null)
+            {
+                _statusText.text = message;
+                _statusText.color = Color.white;
+            }
+        }
+
+        private void ShowInfo(string msg)
+        {
+            if (_statusText != null)
+            {
+                _statusText.text = msg;
+                _statusText.color = new Color(1f, 0.9f, 0.35f);
+            }
+
+            Debug.Log($"[Auth] {msg}");
+        }
+
+        private void ShowSuccess(string msg)
+        {
+            if (_statusText != null)
+            {
+                _statusText.text = msg;
+                _statusText.color = new Color(0.35f, 1f, 0.55f);
+            }
+
+            Debug.Log($"[Auth] {msg}");
         }
 
         private void ShowError(string msg)
@@ -158,6 +251,7 @@ namespace FrentePartido.Auth
                 _statusText.text = msg;
                 _statusText.color = Color.red;
             }
+
             Debug.LogWarning($"[Auth] {msg}");
         }
 
@@ -168,6 +262,17 @@ namespace FrentePartido.Auth
                 _statusText.text = "";
                 _statusText.color = Color.white;
             }
+        }
+
+        private static bool LooksLikeExistingAccount(string error)
+        {
+            if (string.IsNullOrWhiteSpace(error))
+            {
+                return false;
+            }
+
+            string normalized = error.ToLowerInvariant();
+            return normalized.Contains("existe") || normalized.Contains("already");
         }
     }
 }

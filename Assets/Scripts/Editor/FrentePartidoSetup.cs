@@ -8,6 +8,7 @@ using TMPro;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using System.IO;
+using System.Collections.Generic;
 
 namespace FrentePartido.Editor
 {
@@ -453,8 +454,24 @@ namespace FrentePartido.Editor
             var netMgr = new GameObject("NetworkManager");
             var nm = netMgr.AddComponent<NetworkManager>();
             var transport = netMgr.AddComponent<UnityTransport>();
-            nm.NetworkConfig = new NetworkConfig();
-            // Player prefab will be assigned after scenes save
+            var playerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{PREFABS}/Characters/Player.prefab");
+            var defaultPrefabs = AssetDatabase.LoadAssetAtPath<NetworkPrefabsList>("Assets/DefaultNetworkPrefabs.asset");
+
+            nm.NetworkConfig = new NetworkConfig
+            {
+                NetworkTransport = transport,
+                PlayerPrefab = playerPrefab
+            };
+
+            if (defaultPrefabs != null)
+            {
+                nm.NetworkConfig.Prefabs.NetworkPrefabsLists = new List<NetworkPrefabsList> { defaultPrefabs };
+            }
+            else
+            {
+                Debug.LogWarning("[Setup] DefaultNetworkPrefabs.asset not found. Network prefab list is empty.");
+            }
+
             netMgr.AddComponent<Networking.NetworkSessionManager>();
 
             // Bootstrap

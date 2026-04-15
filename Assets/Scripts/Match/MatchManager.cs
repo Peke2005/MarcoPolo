@@ -46,6 +46,23 @@ namespace FrentePartido.Match
             {
                 _roundManager.OnRoundWon += HandleRoundWon;
             }
+
+            if (IsServer)
+            {
+                NetworkManager.Singleton.OnClientConnectedCallback += HandleClientConnectedForStart;
+                TryAutoStart();
+            }
+        }
+
+        private void HandleClientConnectedForStart(ulong _) => TryAutoStart();
+
+        private void TryAutoStart()
+        {
+            if (!IsServer) return;
+            if (State.Value == MatchState.InProgress) return;
+            if (NetworkManager.Singleton.ConnectedClientsIds.Count < 2) return;
+
+            StartMatch();
         }
 
         public override void OnNetworkDespawn()
@@ -53,6 +70,11 @@ namespace FrentePartido.Match
             if (IsServer && _roundManager != null)
             {
                 _roundManager.OnRoundWon -= HandleRoundWon;
+            }
+
+            if (NetworkManager.Singleton != null)
+            {
+                NetworkManager.Singleton.OnClientConnectedCallback -= HandleClientConnectedForStart;
             }
         }
 

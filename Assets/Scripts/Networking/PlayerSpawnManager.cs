@@ -48,6 +48,14 @@ namespace FrentePartido.Networking
             NetworkManager.Singleton.OnClientDisconnectCallback += HandleClientDisconnected;
 
             Debug.Log("[Spawn] PlayerSpawnManager ready (server).");
+
+            // Scene just loaded with clients already connected from the lobby —
+            // the connect callback won't fire for them, so spawn them now.
+            foreach (ulong clientId in NetworkManager.Singleton.ConnectedClientsIds)
+            {
+                HandleClientConnected(clientId);
+            }
+
         }
 
         public override void OnNetworkDespawn()
@@ -96,6 +104,8 @@ namespace FrentePartido.Networking
 
         private void SpawnPlayerForClient(ulong clientId)
         {
+            if (_spawnedPlayers.ContainsKey(clientId)) return;
+
             // Determine spawn point based on join order
             int slotIndex = _joinOrder.IndexOf(clientId);
             Vector2 spawnPos;

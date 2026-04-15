@@ -490,6 +490,13 @@ namespace FrentePartido.UI
                 _readyButtonBg.color = _isReady ? GREEN : BTN;
 
             await LobbyManager.UpdatePlayerData("IsReady", _isReady.ToString());
+
+            var netState = FrentePartido.Networking.NetworkGameState.Instance;
+            if (netState != null && netState.IsSpawned)
+            {
+                netState.SetPlayerReadyServerRpc(_isReady);
+            }
+
             CheckStartCondition();
         }
 

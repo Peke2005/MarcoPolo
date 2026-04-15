@@ -1,5 +1,6 @@
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using FrentePartido.Data;
 
 namespace FrentePartido.Player
@@ -40,16 +41,42 @@ namespace FrentePartido.Player
                 _rb.bodyType = RigidbodyType2D.Dynamic;
                 _rb.gravityScale = 0f; // Top-down, no gravity
                 _rb.freezeRotation = true;
+                _movementEnabled = true;
+                if (_input != null) _input.IsInputEnabled = true;
             }
         }
 
+        private void Update()
+        {
+            // Owner-side WASD read every frame so we don't depend on the
+            // InputAction being properly bound. Runs in Update to capture
+            // key state reliably; the actual move is applied in FixedUpdate.
+            if (!IsSpawned || !IsOwner) return;
+
+            var kb = Keyboard.current;
+            if (kb == null) return;
+
+            Vector2 dir = Vector2.zero;
+            if (kb.wKey.isPressed || kb.upArrowKey.isPressed)    dir.y += 1f;
+            if (kb.sKey.isPressed || kb.downArrowKey.isPressed)  dir.y -= 1f;
+            if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) dir.x += 1f;
+            if (kb.aKey.isPressed || kb.leftArrowKey.isPressed)  dir.x -= 1f;
+            _rawKeyboardDir = dir;
+        }
+
+        private Vector2 _rawKeyboardDir;
+
         private void FixedUpdate()
         {
-            if (!IsOwner || !IsSpawned) return;
-            if (!_movementEnabled || _input == null) return;
+            if (!IsSpawned || !IsOwner) return;
 
             float speed = balanceData != null ? balanceData.moveSpeed : 5f;
-            Vector2 moveDir = _input.MoveInput;
+            Vector2 moveDir = _input != null ? _input.MoveInput : Vector2.zero;
+
+            if (moveDir.sqrMagnitude < 0.01f)
+                moveDir = _rawKeyboardDir;
+
+            if (!_movementEnabled && moveDir.sqrMagnitude < 0.01f) return;
 
             // Normalize to prevent diagonal speed boost
             if (moveDir.sqrMagnitude > 1f)
@@ -64,7 +91,13 @@ namespace FrentePartido.Player
                 targetPos.y = Mathf.Clamp(targetPos.y, mapDefinition.boundsMin.y, mapDefinition.boundsMax.y);
             }
 
-            _rb.MovePosition(targetPos);
+            // Try physics-aware MovePosition first; if the rigidbody is kinematic
+            // or somehow frozen, fall back to a raw transform move so the owner
+            // always gets visual feedback.
+            if (_rb != null && _rb.bodyType != RigidbodyType2D.Kinematic)
+                _rb.MovePosition(targetPos);
+            else
+                transform.position = new Vector3(targetPos.x, targetPos.y, transform.position.z);
         }
 
         /// <summary>

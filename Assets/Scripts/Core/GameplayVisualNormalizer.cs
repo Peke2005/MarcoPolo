@@ -41,12 +41,119 @@ namespace FrentePartido.Core
         {
             if (!scene.IsValid() || !scene.name.Contains("Game")) return;
             EnsureTextures();
+            BuildArenaIfMissing();
             ReskinArena();
             PopulateDecor();
             ConfigureCamera();
             BuildCrosshair();
             BuildMinimap();
+            BuildAmbientParticles();
             FixLayerMasks();
+        }
+
+        // ── Arena builder (runs only if scene has no Floor/Walls) ────
+        private static void BuildArenaIfMissing()
+        {
+            if (GameObject.Find("Floor") != null) return;
+
+            var root = new GameObject("~Arena");
+
+            MakeArenaPiece(root, "Floor", Vector2.zero, Vector2.zero, addCollider: false);
+            MakeArenaPiece(root, "Wall_Top",    new Vector2( 0f,  7.0f), new Vector2(24f, 0.6f), true);
+            MakeArenaPiece(root, "Wall_Bottom", new Vector2( 0f, -7.0f), new Vector2(24f, 0.6f), true);
+            MakeArenaPiece(root, "Wall_Left",  new Vector2(-11.7f, 0f), new Vector2(0.6f, 14f), true);
+            MakeArenaPiece(root, "Wall_Right", new Vector2( 11.7f, 0f), new Vector2(0.6f, 14f), true);
+            MakeArenaPiece(root, "SpawnA", new Vector2(-9f, 0f), new Vector2(1.8f, 1.8f), false);
+            MakeArenaPiece(root, "SpawnB", new Vector2( 9f, 0f), new Vector2(1.8f, 1.8f), false);
+        }
+
+        private static void MakeArenaPiece(GameObject root, string name, Vector2 pos, Vector2 size, bool addCollider)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(root.transform, false);
+            go.transform.position = new Vector3(pos.x, pos.y, 0f);
+            go.AddComponent<SpriteRenderer>();
+            if (addCollider)
+            {
+                var box = go.AddComponent<BoxCollider2D>();
+                box.size = size;
+            }
+        }
+
+        // ── Vignette (screen-space dark edges) ───────────────────────
+        private static void BuildVignette()
+        {
+            if (GameObject.Find("~Vignette") != null) return;
+
+            var go = new GameObject("~Vignette", typeof(Canvas), typeof(CanvasScaler));
+            var canvas = go.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 250;
+
+            var img = new GameObject("Vig", typeof(RectTransform), typeof(Image));
+            img.transform.SetParent(go.transform, false);
+            var rt = img.GetComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var image = img.GetComponent<Image>();
+            image.sprite = MakeSprite(GenerateVignetteTexture(256), 32f);
+            image.color = new Color(0f, 0f, 0f, 0.85f);
+            image.raycastTarget = false;
+        }
+
+        private static Texture2D GenerateVignetteTexture(int size)
+        {
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            var px = new Color[size * size];
+            Vector2 c = new Vector2(size / 2f, size / 2f);
+            float r = size * 0.55f;
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float d = Vector2.Distance(new Vector2(x, y), c) / r;
+                float a = Mathf.Clamp01(Mathf.Pow(d, 2.4f));
+                px[y * size + x] = new Color(0f, 0f, 0f, a);
+            }
+            tex.SetPixels(px);
+            return tex;
+        }
+
+        // ── Ambient dust particles ───────────────────────────────────
+        private static void BuildAmbientParticles()
+        {
+            if (GameObject.Find("~AmbientDust") != null) return;
+            var go = new GameObject("~AmbientDust");
+            go.transform.position = Vector3.zero;
+            var ps = go.AddComponent<ParticleSystem>();
+            var main = ps.main;
+            main.startLifetime = 3.5f;
+            main.startSize = 0.08f;
+            main.startSpeed = 0.15f;
+            main.startColor = new Color(1f, 0.95f, 0.75f, 0.35f);
+            main.maxParticles = 200;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            var emission = ps.emission;
+            emission.rateOverTime = 25f;
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Box;
+            shape.scale = new Vector3(24f, 14f, 0.1f);
+            var col = ps.colorOverLifetime;
+            col.enabled = true;
+            var grad = new Gradient();
+            grad.SetKeys(
+                new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+                new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(0.35f, 0.3f), new GradientAlphaKey(0f, 1f) });
+            col.color = grad;
+            var sr = ps.GetComponent<ParticleSystemRenderer>();
+            sr.sortingOrder = 20;
+        }
+
+        // ── Player visual enhancer watcher ───────────────────────────
+        private static void EnsurePlayerVisualWatcher()
+        {
+            if (GameObject.Find("~PlayerVisuals") != null) return;
+            var go = new GameObject("~PlayerVisuals");
+            go.AddComponent<PlayerVisualWatcher>();
         }
 
         // ── Minimap ──────────────────────────────────────────────────
@@ -512,6 +619,146 @@ namespace FrentePartido.Core
         private void OnDestroy()
         {
             Cursor.visible = true;
+        }
+    }
+
+    /// <summary>Runtime watcher that styles player NetworkObjects with circle body,
+    /// outline and drop shadow. Also pulses the beacon.</summary>
+    public class PlayerVisualWatcher : MonoBehaviour
+    {
+        private static Sprite _circleSprite;
+        private static Sprite _ringSprite;
+        private readonly HashSet<int> _styled = new HashSet<int>();
+        private float _pulseT;
+
+        private void Awake()
+        {
+            if (_circleSprite == null) _circleSprite = MakeCircle(128, 0f);
+            if (_ringSprite == null)   _ringSprite   = MakeCircle(128, 0.78f);
+        }
+
+        private void LateUpdate()
+        {
+            _pulseT += Time.deltaTime;
+
+            var nm = Unity.Netcode.NetworkManager.Singleton;
+            if (nm != null && nm.SpawnManager != null)
+            {
+                foreach (var kv in nm.SpawnManager.SpawnedObjects)
+                {
+                    var no = kv.Value;
+                    if (no == null || !no.IsPlayerObject) continue;
+                    StylePlayer(no.gameObject, no.OwnerClientId == nm.LocalClientId);
+                }
+            }
+            else
+            {
+                foreach (var rb in Object.FindObjectsByType<Rigidbody2D>(FindObjectsSortMode.None))
+                {
+                    if (rb.gameObject.name.Contains("Player")) StylePlayer(rb.gameObject, false);
+                }
+            }
+
+            PulseBeacon();
+        }
+
+        private void StylePlayer(GameObject player, bool isLocal)
+        {
+            int id = player.GetInstanceID();
+            if (_styled.Contains(id) && player.transform.Find("~VBody") != null) return;
+            _styled.Add(id);
+
+            var existing = player.GetComponentsInChildren<SpriteRenderer>(true);
+            foreach (var sr in existing)
+            {
+                if (sr.gameObject.name.StartsWith("~V")) continue;
+                sr.enabled = false;
+            }
+
+            bool isBlue = DetectFactionBlue(player);
+            Color body = isBlue ? new Color(0.28f, 0.55f, 1f, 1f) : new Color(1f, 0.35f, 0.30f, 1f);
+            Color outline = Color.Lerp(body, Color.black, 0.55f);
+            Color highlight = Color.Lerp(body, Color.white, 0.45f);
+
+            AddSprite(player.transform, "~VShadow", _circleSprite,
+                new Color(0f, 0f, 0f, 0.45f), new Vector3(0.12f, -0.14f, 0f), 0.95f, 2);
+            AddSprite(player.transform, "~VOutline", _circleSprite, outline, Vector3.zero, 1.05f, 9);
+            AddSprite(player.transform, "~VBody", _circleSprite, body, Vector3.zero, 0.85f, 10);
+            AddSprite(player.transform, "~VHi", _circleSprite, highlight,
+                new Vector3(-0.12f, 0.14f, 0f), 0.35f, 11);
+            AddSprite(player.transform, "~VRing", _ringSprite,
+                isLocal ? new Color(1f, 0.95f, 0.3f, 0.9f) : new Color(1f, 1f, 1f, 0.25f),
+                Vector3.zero, 1.3f, 8);
+
+            var mm = new GameObject("~VMinimap");
+            mm.transform.SetParent(player.transform, false);
+            var mmr = mm.AddComponent<SpriteRenderer>();
+            mmr.sprite = _circleSprite;
+            mmr.color = body;
+            mmr.transform.localScale = Vector3.one * 2.2f;
+            mmr.sortingOrder = 50;
+        }
+
+        private static bool DetectFactionBlue(GameObject player)
+        {
+            // Left side of arena = Blue, right side = Red. Matches PlayerSpawnManager slot logic.
+            return player.transform.position.x <= 0f;
+        }
+
+        private static void AddSprite(Transform parent, string name, Sprite sprite,
+            Color color, Vector3 localPos, float scale, int order)
+        {
+            Transform existing = parent.Find(name);
+            if (existing != null) { existing.localScale = Vector3.one * scale; return; }
+
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPos;
+            go.transform.localScale = Vector3.one * scale;
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = sprite;
+            sr.color = color;
+            sr.sortingOrder = order;
+        }
+
+        private static Sprite MakeCircle(int size, float innerRadiusNorm)
+        {
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            var px = new Color[size * size];
+            Vector2 c = new Vector2(size / 2f, size / 2f);
+            float r = size * 0.48f;
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float d = Vector2.Distance(new Vector2(x, y), c);
+                if (d > r) { px[y * size + x] = new Color(0, 0, 0, 0); continue; }
+                if (innerRadiusNorm > 0f && d < r * innerRadiusNorm)
+                    { px[y * size + x] = new Color(0, 0, 0, 0); continue; }
+                float edge = Mathf.SmoothStep(1f, 0f, (d - (r - 2f)) / 2f);
+                px[y * size + x] = new Color(1f, 1f, 1f, edge);
+            }
+            tex.filterMode = FilterMode.Bilinear;
+            tex.SetPixels(px);
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 64f);
+        }
+
+        private void PulseBeacon()
+        {
+            var beacon = GameObject.Find("Beacon");
+            if (beacon == null) return;
+            float s = 1f + Mathf.Sin(_pulseT * 3f) * 0.12f;
+            var renderers = beacon.GetComponentsInChildren<SpriteRenderer>();
+            foreach (var sr in renderers)
+            {
+                if (sr.transform == beacon.transform)
+                {
+                    sr.transform.localScale = new Vector3(s, s, 1f);
+                    sr.color = Color.Lerp(new Color(1f, 0.85f, 0.25f, 1f),
+                                          new Color(1f, 1f, 0.55f, 1f),
+                                          (Mathf.Sin(_pulseT * 3f) + 1f) * 0.5f);
+                }
+            }
         }
     }
 

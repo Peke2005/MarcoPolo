@@ -133,7 +133,10 @@ namespace FrentePartido.Networking
                 return;
             }
 
-            netObj.SpawnAsPlayerObject(clientId, true);
+            // Keep player ownership under Netcode control across scene transitions.
+            // If destroyWithScene is true, a non-host client can destroy its local
+            // Player(Clone) during a scene unload and NGO reports Invalid Destroy.
+            netObj.SpawnAsPlayerObject(clientId, false);
 
             _spawnedPlayers[clientId] = netObj;
 

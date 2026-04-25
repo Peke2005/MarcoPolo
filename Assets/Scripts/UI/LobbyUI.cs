@@ -49,6 +49,8 @@ namespace FrentePartido.UI
         private int _selectedAbility;
         private int _selectedFaction;
         private float _copyTimer;
+        private float _lobbyRefreshTimer;
+        private bool _refreshingLobby;
 
         // ── Theme ───────────────────────────────────────────
         static readonly Color BG        = c(0.06f, 0.07f, 0.10f);
@@ -113,6 +115,13 @@ namespace FrentePartido.UI
             {
                 _copyTimer -= Time.deltaTime;
                 if (_copyTimer <= 0) HideCopyFeedback();
+            }
+
+            _lobbyRefreshTimer -= Time.unscaledDeltaTime;
+            if (_lobbyRefreshTimer <= 0f)
+            {
+                _lobbyRefreshTimer = 1.5f;
+                RefreshLobbyView();
             }
         }
 
@@ -490,6 +499,8 @@ namespace FrentePartido.UI
                 _readyButtonBg.color = _isReady ? GREEN : BTN;
 
             await LobbyManager.UpdatePlayerData("IsReady", _isReady.ToString());
+            await LobbyManager.RefreshCurrentLobby();
+            UpdatePlayerList();
 
             var netState = FrentePartido.Networking.NetworkGameState.Instance;
             if (netState != null && netState.IsSpawned)
@@ -516,22 +527,29 @@ namespace FrentePartido.UI
 
         void UpdatePlayerList()
         {
-            bool hasP2 = Unity.Netcode.NetworkManager.Singleton != null &&
-                         Unity.Netcode.NetworkManager.Singleton.ConnectedClientsIds.Count >= 2;
+            var players = LobbyManager.GetPlayerSnapshots();
+            bool hasP2 = players.Count >= 2 ||
+                         (Unity.Netcode.NetworkManager.Singleton != null &&
+                          Unity.Netcode.NetworkManager.Singleton.ConnectedClientsIds.Count >= 2);
+
+            string p1Name = players.Count > 0 ? players[0].PlayerName : (GameConfig.Preferences.playerName ?? "Jugador 1");
+            string p2Name = players.Count > 1 ? players[1].PlayerName : "Esperando rival...";
+            bool p1Ready = players.Count > 0 && players[0].IsReady;
+            bool p2Ready = players.Count > 1 && players[1].IsReady;
 
             if (_player1NameText != null)
-                _player1NameText.text = GameConfig.Preferences.playerName ?? "Jugador 1";
+                _player1NameText.text = p1Name;
             if (_player1StatusText != null)
-                _player1StatusText.text = "Conectado";
+                _player1StatusText.text = p1Ready ? "Listo" : "Conectado";
             if (_player1CardBg != null)
-                _player1CardBg.color = CARD;
+                _player1CardBg.color = p1Ready ? new Color(0.12f, 0.22f, 0.14f, 1f) : CARD;
 
             if (_player2NameText != null)
-                _player2NameText.text = hasP2 ? "Jugador 2" : "Esperando rival...";
+                _player2NameText.text = hasP2 ? p2Name : "Esperando rival...";
             if (_player2StatusText != null)
-                _player2StatusText.text = hasP2 ? "Conectado" : "";
+                _player2StatusText.text = hasP2 ? (p2Ready ? "Listo" : "Conectado") : "";
             if (_player2CardBg != null)
-                _player2CardBg.color = hasP2 ? CARD : CARD_WAIT;
+                _player2CardBg.color = hasP2 ? (p2Ready ? new Color(0.12f, 0.22f, 0.14f, 1f) : CARD) : CARD_WAIT;
         }
 
         void OnPlayerJoined(ulong id) { UpdatePlayerList(); CheckStartCondition(); }
@@ -542,7 +560,20 @@ namespace FrentePartido.UI
             if (_startGameButton == null) return;
             bool hasNet = Unity.Netcode.NetworkManager.Singleton != null &&
                           Unity.Netcode.NetworkManager.Singleton.IsListening;
-            _startGameButton.interactable = hasNet;
+            bool canStart = hasNet && LobbyManager.IsHost && LobbyManager.AreAllPlayersReady();
+            _startGameButton.interactable = canStart;
+        }
+
+        async void RefreshLobbyView()
+        {
+            if (_refreshingLobby || !LobbyManager.IsInLobby) return;
+
+            _refreshingLobby = true;
+            await LobbyManager.RefreshCurrentLobby();
+            _refreshingLobby = false;
+
+            UpdatePlayerList();
+            CheckStartCondition();
         }
 
         // ════════════════════════════════════════════════════

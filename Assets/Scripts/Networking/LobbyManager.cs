@@ -27,6 +27,26 @@ namespace FrentePartido.Networking
         public static bool IsHost => _currentLobby != null &&
             _currentLobby.HostId == AuthenticationService.Instance.PlayerId;
 
+        public readonly struct LobbyPlayerSnapshot
+        {
+            public readonly string PlayerId;
+            public readonly string PlayerName;
+            public readonly string AbilityId;
+            public readonly string Faction;
+            public readonly bool IsReady;
+            public readonly bool IsLocal;
+
+            public LobbyPlayerSnapshot(string playerId, string playerName, string abilityId, string faction, bool isReady, bool isLocal)
+            {
+                PlayerId = playerId;
+                PlayerName = playerName;
+                AbilityId = abilityId;
+                Faction = faction;
+                IsReady = isReady;
+                IsLocal = isLocal;
+            }
+        }
+
         /// <summary>
         /// Creates a new lobby with relay join code stored in lobby data.
         /// </summary>
@@ -203,6 +223,11 @@ namespace FrentePartido.Networking
             }
         }
 
+        public static async Task RefreshCurrentLobby()
+        {
+            await RefreshLobby();
+        }
+
         /// <summary>
         /// Retrieves the Relay join code stored in the current lobby data.
         /// </summary>
@@ -218,6 +243,52 @@ namespace FrentePartido.Networking
 
             Debug.LogWarning("[Lobby] Relay join code not found in lobby data.");
             return null;
+        }
+
+        public static List<LobbyPlayerSnapshot> GetPlayerSnapshots()
+        {
+            var result = new List<LobbyPlayerSnapshot>();
+            if (_currentLobby?.Players == null) return result;
+
+            string localId = AuthenticationService.Instance.PlayerId;
+            foreach (var player in _currentLobby.Players)
+            {
+                string name = GetData(player, KEY_PLAYER_NAME);
+                if (string.IsNullOrWhiteSpace(name)) name = "Jugador";
+
+                string ability = GetData(player, KEY_ABILITY_ID);
+                string faction = GetData(player, KEY_FACTION);
+                bool ready = bool.TryParse(GetData(player, KEY_IS_READY), out bool parsedReady) && parsedReady;
+
+                result.Add(new LobbyPlayerSnapshot(
+                    player.Id,
+                    name,
+                    ability,
+                    faction,
+                    ready,
+                    player.Id == localId));
+            }
+
+            return result;
+        }
+
+        public static bool AreAllPlayersReady(int expectedPlayers = 2)
+        {
+            var players = GetPlayerSnapshots();
+            if (players.Count < expectedPlayers) return false;
+
+            for (int i = 0; i < players.Count; i++)
+            {
+                if (!players[i].IsReady) return false;
+            }
+
+            return true;
+        }
+
+        private static string GetData(Unity.Services.Lobbies.Models.Player player, string key)
+        {
+            if (player?.Data == null) return "";
+            return player.Data.TryGetValue(key, out PlayerDataObject value) ? value.Value : "";
         }
 
         private static Unity.Services.Lobbies.Models.Player CreateLocalPlayer()

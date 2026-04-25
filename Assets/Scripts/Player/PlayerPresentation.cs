@@ -42,7 +42,7 @@ namespace FrentePartido.Player
         {
             _health = GetComponent<PlayerHealth>();
             EnsureSpriteRenderers();
-            ApplyProceduralSprites();
+            ApplyBaseSprites();
         }
 
         private void EnsureSpriteRenderers()
@@ -74,28 +74,51 @@ namespace FrentePartido.Player
             }
         }
 
+        private static Sprite _blueBodySprite;
+        private static Sprite _redBodySprite;
         private static Sprite _bodySprite;
         private static Sprite _gunSprite;
 
-        private void ApplyProceduralSprites()
+        private void ApplyBaseSprites()
         {
-            if (mainSprite != null && mainSprite.sprite == null)
+            if (_blueBodySprite == null) _blueBodySprite = LoadSprite("RuntimeArt/Characters/manBlue_stand", 70f);
+            if (_redBodySprite == null) _redBodySprite = LoadSprite("RuntimeArt/Characters/manBrown_stand", 70f);
+            if (_gunSprite == null) _gunSprite = LoadSprite("RuntimeArt/Characters/weapon_gun", 48f);
+
+            if (mainSprite != null)
             {
-                if (_bodySprite == null) _bodySprite = BuildBodySprite();
-                mainSprite.sprite = _bodySprite;
+                if (_blueBodySprite == null && _bodySprite == null) _bodySprite = BuildBodySprite();
+                mainSprite.sprite = _blueBodySprite != null ? _blueBodySprite : _bodySprite;
                 mainSprite.drawMode = SpriteDrawMode.Simple;
-                mainSprite.transform.localScale = new Vector3(0.9f, 0.9f, 1f);
+                mainSprite.transform.localScale = Vector3.one;
                 mainSprite.sortingOrder = 10;
             }
-            if (weaponSprite != null && weaponSprite.sprite == null)
+            if (weaponSprite != null)
             {
                 if (_gunSprite == null) _gunSprite = BuildGunSprite();
                 weaponSprite.sprite = _gunSprite;
                 weaponSprite.drawMode = SpriteDrawMode.Simple;
-                weaponSprite.transform.localScale = new Vector3(0.9f, 0.9f, 1f);
-                weaponSprite.color = new Color(0.18f, 0.18f, 0.2f, 1f);
+                weaponSprite.transform.localPosition = new Vector3(0.38f, -0.02f, 0f);
+                weaponSprite.transform.localScale = Vector3.one * 1.05f;
+                weaponSprite.color = new Color(0.9f, 0.95f, 1f, 1f);
                 weaponSprite.sortingOrder = 11;
             }
+        }
+
+        private static Sprite LoadSprite(string resourcePath, float pixelsPerUnit)
+        {
+            var texture = Resources.Load<Texture2D>(resourcePath);
+            if (texture == null) return null;
+
+            texture.filterMode = FilterMode.Point;
+            texture.wrapMode = TextureWrapMode.Clamp;
+            return Sprite.Create(
+                texture,
+                new Rect(0, 0, texture.width, texture.height),
+                new Vector2(0.5f, 0.5f),
+                pixelsPerUnit,
+                0,
+                SpriteMeshType.FullRect);
         }
 
         private static Sprite BuildBodySprite()
@@ -203,13 +226,22 @@ namespace FrentePartido.Player
 
             if (mainSprite != null)
             {
-                mainSprite.color = factionColor;
-                _baseSpriteColor = factionColor;
+                if (_blueBodySprite != null && _redBodySprite != null)
+                {
+                    mainSprite.sprite = faction == PlayerFaction.Blue ? _blueBodySprite : _redBodySprite;
+                    mainSprite.color = Color.white;
+                    _baseSpriteColor = Color.white;
+                }
+                else
+                {
+                    mainSprite.color = factionColor;
+                    _baseSpriteColor = factionColor;
+                }
             }
 
             if (weaponSprite != null)
             {
-                Color gunMetal = new Color(0.22f, 0.22f, 0.24f, 1f);
+                Color gunMetal = new Color(0.9f, 0.95f, 1f, 1f);
                 weaponSprite.color = gunMetal;
                 _baseWeaponColor = gunMetal;
             }
@@ -294,7 +326,7 @@ namespace FrentePartido.Player
             _bobT += Time.deltaTime * (moving ? 14f : 0f);
             float bob = moving ? Mathf.Sin(_bobT) * 0.06f : 0f;
             float squash = moving ? 1f + Mathf.Abs(Mathf.Sin(_bobT)) * 0.05f : 1f;
-            Vector3 baseScale = new Vector3(0.9f, 0.9f, 1f);
+            Vector3 baseScale = Vector3.one;
             mainSprite.transform.localPosition = new Vector3(0f, bob, 0f);
             mainSprite.transform.localScale = new Vector3(baseScale.x * squash, baseScale.y / squash, 1f);
         }

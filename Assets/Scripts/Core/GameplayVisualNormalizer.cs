@@ -20,10 +20,12 @@ namespace FrentePartido.Core
         private static Sprite _crateSprite;
         private static Sprite _barrelSprite;
         private static Sprite _grassSprite;
+        private static Sprite _softCircleSprite;
+        private static Sprite _lineSprite;
 
-        private static readonly Color FloorTint  = new Color(0.55f, 0.50f, 0.40f, 1f);
-        private static readonly Color WallTint   = new Color(0.72f, 0.68f, 0.55f, 1f);
-        private static readonly Color CoverTint  = new Color(0.58f, 0.42f, 0.26f, 1f);
+        private static readonly Color FloorTint  = new Color(0.78f, 0.94f, 0.58f, 1f);
+        private static readonly Color WallTint   = new Color(0.92f, 0.73f, 0.48f, 1f);
+        private static readonly Color CoverTint  = new Color(0.72f, 0.48f, 0.25f, 1f);
         private static readonly Color SpawnAColor = new Color(0.30f, 0.60f, 1.00f, 0.95f);
         private static readonly Color SpawnBColor = new Color(1.00f, 0.35f, 0.35f, 0.95f);
 
@@ -44,12 +46,23 @@ namespace FrentePartido.Core
             BuildArenaIfMissing();
             ReskinArena();
             PopulateDecor();
+            BuildArenaAccents();
             ConfigureCamera();
             BuildCrosshair();
             BuildMinimap();
             BuildAmbientParticles();
+            BuildVignette();
+            EnsurePlayerVisualWatcher();
+            SkinHud();
             FixLayerMasks();
         }
+
+#if UNITY_EDITOR
+        public static void RebuildActiveSceneForEditorPreview()
+        {
+            Build(SceneManager.GetActiveScene());
+        }
+#endif
 
         // ── Arena builder (runs only if scene has no Floor/Walls) ────
         private static void BuildArenaIfMissing()
@@ -207,12 +220,23 @@ namespace FrentePartido.Core
         private static void EnsureTextures()
         {
             if (_floorSprite == null) _floorSprite = MakeSprite(GenerateFloorTexture(128), 32f);
-            if (_wallSprite  == null) _wallSprite  = MakeSprite(GenerateBrickTexture(128), 32f);
+            if (_wallSprite  == null) _wallSprite  = LoadResourceSprite("RuntimeArt/Environment/planks", 70f) ?? MakeSprite(GenerateBrickTexture(128), 32f);
             if (_coverSprite == null) _coverSprite = MakeSprite(GenerateCrateTexture(64),  32f);
             if (_spawnSprite == null) _spawnSprite = MakeSprite(GenerateRadialTexture(128), 32f);
             if (_crateSprite == null) _crateSprite = _coverSprite;
-            if (_barrelSprite== null) _barrelSprite= MakeSprite(GenerateBarrelTexture(64),  32f);
-            if (_grassSprite == null) _grassSprite = MakeSprite(GenerateGrassTuft(32),      32f);
+            if (_barrelSprite== null) _barrelSprite= MakeSprite(GenerateBarrelTexture(64),  64f);
+            if (_grassSprite == null) _grassSprite = MakeSprite(GenerateGrassTuft(32),      64f);
+            if (_softCircleSprite == null) _softCircleSprite = MakeSprite(GenerateRadialTexture(128), 64f);
+            if (_lineSprite == null) _lineSprite = MakeSprite(GenerateSolidTexture(8, 8, Color.white), 8f);
+        }
+
+        private static Sprite LoadResourceSprite(string resourcePath, float ppu)
+        {
+            var texture = Resources.Load<Texture2D>(resourcePath);
+            if (texture == null) return null;
+            texture.filterMode = FilterMode.Point;
+            texture.wrapMode = TextureWrapMode.Repeat;
+            return Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f), ppu, 0, SpriteMeshType.FullRect);
         }
 
         private static Sprite MakeSprite(Texture2D tex, float ppu)
@@ -233,14 +257,23 @@ namespace FrentePartido.Core
             {
                 float n = Mathf.PerlinNoise(x * 0.08f, y * 0.08f) * 0.15f;
                 float g = Mathf.PerlinNoise(x * 0.3f + 10, y * 0.3f + 10) * 0.08f;
-                Color c = new Color(0.42f + n + g, 0.36f + n + g * 0.7f, 0.27f + n * 0.5f, 1f);
-                // crack-like dark streaks
-                if ((x + y * 2) % 37 == 0) c *= 0.78f;
-                // grid lines (subtle)
-                if (x % 32 == 0 || y % 32 == 0) c *= 0.88f;
+                Color c = new Color(0.34f + n + g * 0.3f, 0.48f + n + g, 0.25f + n * 0.35f, 1f);
+                float scar = Mathf.PerlinNoise(x * 0.06f + 31f, y * 0.11f + 7f);
+                if (scar > 0.78f) c = Color.Lerp(c, new Color(0.34f, 0.27f, 0.18f, 1f), 0.18f);
+                if (y % 32 == 0) c *= 0.94f;
+                if (x % 32 == 0) c *= 0.97f;
                 pixels[y * size + x] = c;
             }
             Random.state = old;
+            tex.SetPixels(pixels);
+            return tex;
+        }
+
+        private static Texture2D GenerateSolidTexture(int width, int height, Color color)
+        {
+            var tex = new Texture2D(width, height, TextureFormat.RGBA32, false);
+            var pixels = new Color[width * height];
+            for (int i = 0; i < pixels.Length; i++) pixels[i] = color;
             tex.SetPixels(pixels);
             return tex;
         }
@@ -375,6 +408,7 @@ namespace FrentePartido.Core
                     r.size = new Vector2(24f, 14f);
                     r.color = FloorTint;
                     r.sortingOrder = -100;
+                    r.transform.localScale = Vector3.one;
                 }
                 else if (n == "SpawnA")
                 {
@@ -383,6 +417,7 @@ namespace FrentePartido.Core
                     r.size = new Vector2(1.8f, 1.8f);
                     r.color = SpawnAColor;
                     r.sortingOrder = -50;
+                    r.transform.localScale = Vector3.one;
                 }
                 else if (n == "SpawnB")
                 {
@@ -391,6 +426,7 @@ namespace FrentePartido.Core
                     r.size = new Vector2(1.8f, 1.8f);
                     r.color = SpawnBColor;
                     r.sortingOrder = -50;
+                    r.transform.localScale = Vector3.one;
                 }
                 else if (n.StartsWith("Wall_"))
                 {
@@ -400,6 +436,7 @@ namespace FrentePartido.Core
                     r.size = WallSize(n);
                     r.color = WallTint;
                     r.sortingOrder = 5;
+                    r.transform.localScale = Vector3.one;
                     var box = r.GetComponent<BoxCollider2D>();
                     if (box != null) box.size = WallSize(n);
                 }
@@ -410,6 +447,7 @@ namespace FrentePartido.Core
                     r.size = new Vector2(1.6f, 0.6f);
                     r.color = CoverTint;
                     r.sortingOrder = 4;
+                    r.transform.localScale = Vector3.one;
                     var box = r.GetComponent<BoxCollider2D>();
                     if (box != null) box.size = new Vector2(1.6f, 0.6f);
                 }
@@ -456,6 +494,67 @@ namespace FrentePartido.Core
                 AddGrass(root, p);
             }
             Random.state = old;
+        }
+
+        private static void BuildArenaAccents()
+        {
+            GameObject root = GameObject.Find("~ArenaAccents");
+            if (root != null) Object.Destroy(root);
+            root = new GameObject("~ArenaAccents");
+
+            AddBackdrop(root);
+            AddGlow(root, "BlueBaseGlow", new Vector2(-9f, 0f), new Vector2(3.4f, 3.4f), new Color(0.15f, 0.55f, 1f, 0.28f), -70);
+            AddGlow(root, "RedBaseGlow", new Vector2(9f, 0f), new Vector2(3.4f, 3.4f), new Color(1f, 0.2f, 0.12f, 0.28f), -70);
+            AddGlow(root, "BeaconHalo", Vector2.zero, new Vector2(4.2f, 4.2f), new Color(1f, 0.78f, 0.18f, 0.22f), -65);
+
+            AddLine(root, "Midline", new Vector2(0f, 0f), new Vector2(0.08f, 11.8f), new Color(1f, 0.86f, 0.45f, 0.18f), -60);
+            AddLine(root, "TopLane", new Vector2(0f, 3.15f), new Vector2(17f, 0.06f), new Color(0f, 0f, 0f, 0.16f), -61);
+            AddLine(root, "BottomLane", new Vector2(0f, -3.15f), new Vector2(17f, 0.06f), new Color(0f, 0f, 0f, 0.16f), -61);
+
+            for (int i = -5; i <= 5; i++)
+            {
+                AddLine(root, "Dash_" + i, new Vector2(i * 1.6f, 0f), new Vector2(0.55f, 0.06f), new Color(1f, 0.95f, 0.7f, 0.35f), -59);
+            }
+        }
+
+        private static void AddBackdrop(GameObject root)
+        {
+            var go = new GameObject("Backdrop");
+            go.transform.SetParent(root.transform, false);
+            go.transform.position = new Vector3(0f, 0f, 0f);
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = _floorSprite;
+            sr.drawMode = SpriteDrawMode.Tiled;
+            sr.tileMode = SpriteTileMode.Continuous;
+            sr.size = new Vector2(44f, 28f);
+            sr.color = new Color(0.30f, 0.43f, 0.22f, 1f);
+            sr.sortingOrder = -130;
+        }
+
+        private static void AddGlow(GameObject root, string name, Vector2 pos, Vector2 size, Color color, int order)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(root.transform, false);
+            go.transform.position = new Vector3(pos.x, pos.y, 0f);
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = _softCircleSprite;
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.size = size;
+            sr.color = color;
+            sr.sortingOrder = order;
+        }
+
+        private static void AddLine(GameObject root, string name, Vector2 pos, Vector2 size, Color color, int order)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(root.transform, false);
+            go.transform.position = new Vector3(pos.x, pos.y, 0f);
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = _lineSprite;
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.size = size;
+            sr.color = color;
+            sr.sortingOrder = order;
         }
 
         private static void AddCrate(GameObject root, Vector2 pos, float w, float h)
@@ -517,12 +616,43 @@ namespace FrentePartido.Core
             Camera cam = Camera.main;
             if (cam == null) return;
             cam.orthographic = true;
-            cam.orthographicSize = 4.5f;
-            cam.backgroundColor = new Color(0.08f, 0.07f, 0.06f, 1f);
+            cam.orthographicSize = 5.1f;
+            cam.backgroundColor = new Color(0.12f, 0.18f, 0.11f, 1f);
             cam.clearFlags = CameraClearFlags.SolidColor;
 
             if (cam.GetComponent<CameraFollow2D>() == null)
                 cam.gameObject.AddComponent<CameraFollow2D>();
+        }
+
+        private static void SkinHud()
+        {
+            var hud = GameObject.Find("HUDCanvas");
+            if (hud == null) return;
+
+            foreach (var image in hud.GetComponentsInChildren<Image>(true))
+            {
+                string n = image.gameObject.name;
+                if (n.EndsWith("_BG"))
+                {
+                    image.color = new Color(0.015f, 0.02f, 0.025f, 0.78f);
+                }
+                else if (n == "HealthBar")
+                {
+                    image.color = new Color(0.95f, 0.18f, 0.12f, 0.95f);
+                }
+                else if (n == "ArmorBar")
+                {
+                    image.color = new Color(0.2f, 0.65f, 1f, 0.95f);
+                }
+                else if (n == "ReloadBar" || n == "BeaconCaptureBar")
+                {
+                    image.color = new Color(1f, 0.74f, 0.18f, 0.95f);
+                }
+                else if (n == "GrenadeIcon")
+                {
+                    image.color = new Color(1f, 0.86f, 0.35f, 0.95f);
+                }
+            }
         }
 
         // ── Crosshair UI ─────────────────────────────────────────────
@@ -665,38 +795,18 @@ namespace FrentePartido.Core
         private void StylePlayer(GameObject player, bool isLocal)
         {
             int id = player.GetInstanceID();
-            if (_styled.Contains(id) && player.transform.Find("~VBody") != null) return;
+            if (_styled.Contains(id) && player.transform.Find("~VRing") != null) return;
             _styled.Add(id);
-
-            var existing = player.GetComponentsInChildren<SpriteRenderer>(true);
-            foreach (var sr in existing)
-            {
-                if (sr.gameObject.name.StartsWith("~V")) continue;
-                sr.enabled = false;
-            }
 
             bool isBlue = DetectFactionBlue(player);
             Color body = isBlue ? new Color(0.28f, 0.55f, 1f, 1f) : new Color(1f, 0.35f, 0.30f, 1f);
-            Color outline = Color.Lerp(body, Color.black, 0.55f);
-            Color highlight = Color.Lerp(body, Color.white, 0.45f);
 
             AddSprite(player.transform, "~VShadow", _circleSprite,
-                new Color(0f, 0f, 0f, 0.45f), new Vector3(0.12f, -0.14f, 0f), 0.95f, 2);
-            AddSprite(player.transform, "~VOutline", _circleSprite, outline, Vector3.zero, 1.05f, 9);
-            AddSprite(player.transform, "~VBody", _circleSprite, body, Vector3.zero, 0.85f, 10);
-            AddSprite(player.transform, "~VHi", _circleSprite, highlight,
-                new Vector3(-0.12f, 0.14f, 0f), 0.35f, 11);
+                new Color(0f, 0f, 0f, 0.42f), new Vector3(0.12f, -0.16f, 0f), 1.1f, 2);
             AddSprite(player.transform, "~VRing", _ringSprite,
-                isLocal ? new Color(1f, 0.95f, 0.3f, 0.9f) : new Color(1f, 1f, 1f, 0.25f),
-                Vector3.zero, 1.3f, 8);
+                isLocal ? new Color(1f, 0.92f, 0.22f, 0.95f) : new Color(body.r, body.g, body.b, 0.45f),
+                Vector3.zero, 0.95f, 8);
 
-            var mm = new GameObject("~VMinimap");
-            mm.transform.SetParent(player.transform, false);
-            var mmr = mm.AddComponent<SpriteRenderer>();
-            mmr.sprite = _circleSprite;
-            mmr.color = body;
-            mmr.transform.localScale = Vector3.one * 2.2f;
-            mmr.sortingOrder = 50;
         }
 
         private static bool DetectFactionBlue(GameObject player)

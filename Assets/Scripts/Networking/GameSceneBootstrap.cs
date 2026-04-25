@@ -42,6 +42,8 @@ namespace FrentePartido.Networking
 
         private static void StartRunner()
         {
+            if (LanSmokeBootstrap.HasLanSmokeArgs()) return;
+
             var runnerGO = new GameObject("~GameSceneBootstrapRunner");
             Object.DontDestroyOnLoad(runnerGO);
             runnerGO.AddComponent<Runner>();

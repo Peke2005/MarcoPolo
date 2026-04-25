@@ -79,7 +79,7 @@ namespace FrentePartido.UI
 
         private void Awake()
         {
-            if (_joinCodeText == null) BuildUI();
+            BuildUI();
         }
 
         private void Start()

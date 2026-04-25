@@ -40,7 +40,8 @@ namespace FrentePartido.Networking
             var netManager = go.AddComponent<NetworkManager>();
             netManager.NetworkConfig = new NetworkConfig
             {
-                NetworkTransport = transport
+                NetworkTransport = transport,
+                ForceSamePrefabs = false
             };
             go.AddComponent<NetworkSessionManager>();
 
@@ -84,7 +85,8 @@ namespace FrentePartido.Networking
                     var transport = GetComponent<UnityTransport>() ?? gameObject.AddComponent<UnityTransport>();
                     _networkManager.NetworkConfig = new NetworkConfig
                     {
-                        NetworkTransport = transport
+                        NetworkTransport = transport,
+                        ForceSamePrefabs = false
                     };
 
                     Debug.LogWarning("[Session] NetworkManager was missing. Created fallback NetworkManager + UnityTransport.");
@@ -117,6 +119,10 @@ namespace FrentePartido.Networking
                 _networkManager.NetworkConfig.NetworkTransport = transport;
                 Debug.LogWarning("[Session] NetworkTransport was null in NetworkConfig. Assigned UnityTransport automatically.");
             }
+
+            // Dev/editor and build clients must be allowed to connect while prefabs are repaired.
+            // Registered prefab list still must contain valid NetworkObjects for spawned prefabs.
+            _networkManager.NetworkConfig.ForceSamePrefabs = false;
 
             if (_networkManager.NetworkConfig.Prefabs.NetworkPrefabsLists.Count == 0)
             {

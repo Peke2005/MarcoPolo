@@ -17,6 +17,7 @@ namespace FrentePartido.Core
     public static class GameConfig
     {
         private const string PREFS_KEY = "FP_PlayerPrefs";
+        public const string AUTH_URL_PREFS_KEY = "FP_AuthBaseUrl";
         public const string DEFAULT_AUTH_BASE_URL = "http://26.234.30.190:3001";
 
         public static PlayerPreferences Preferences { get; private set; } = new PlayerPreferences();
@@ -29,7 +30,26 @@ namespace FrentePartido.Core
                 Preferences = JsonUtility.FromJson<PlayerPreferences>(json);
             }
 
-            Preferences.authBaseUrl = DEFAULT_AUTH_BASE_URL;
+            if (Preferences == null)
+            {
+                Preferences = new PlayerPreferences();
+            }
+
+            string envUrl = System.Environment.GetEnvironmentVariable("FP_AUTH_BASE_URL");
+            string savedOverride = PlayerPrefs.GetString(AUTH_URL_PREFS_KEY, "");
+
+            if (!string.IsNullOrWhiteSpace(envUrl))
+            {
+                Preferences.authBaseUrl = envUrl.Trim();
+            }
+            else if (!string.IsNullOrWhiteSpace(savedOverride))
+            {
+                Preferences.authBaseUrl = savedOverride.Trim();
+            }
+            else if (string.IsNullOrWhiteSpace(Preferences.authBaseUrl))
+            {
+                Preferences.authBaseUrl = DEFAULT_AUTH_BASE_URL;
+            }
 
             Debug.Log($"[GameConfig] Loaded. Name: {Preferences.playerName} | Auth: {Preferences.authBaseUrl}");
         }

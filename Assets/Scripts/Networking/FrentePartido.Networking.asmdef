@@ -4,6 +4,7 @@
     "references": [
         "FrentePartido.Data",
         "FrentePartido.Core",
+        "FrentePartido.Player",
         "Unity.Netcode.Runtime",
         "Unity.Services.Core",
         "Unity.Services.Authentication",

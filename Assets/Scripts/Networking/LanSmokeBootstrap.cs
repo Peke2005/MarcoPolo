@@ -1,10 +1,12 @@
 using System.Collections;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using FrentePartido.Player;
 
 namespace FrentePartido.Networking
 {
@@ -76,6 +78,11 @@ namespace FrentePartido.Networking
                     yield break;
                 }
 
+                if (_isHost && HasArg(args, "-fpCombatSmoke"))
+                {
+                    StartCoroutine(RunCombatSmoke());
+                }
+
                 if (quitAfter > 0f)
                 {
                     StartCoroutine(CaptureAndQuit(args, quitAfter));
@@ -110,6 +117,68 @@ namespace FrentePartido.Networking
                 }
 
                 Application.Quit(0);
+            }
+
+            private IEnumerator RunCombatSmoke()
+            {
+                var nm = NetworkManager.Singleton;
+                float deadline = Time.realtimeSinceStartup + 12f;
+
+                while (Time.realtimeSinceStartup < deadline)
+                {
+                    if (nm != null && nm.ConnectedClientsIds.Count >= 2 && GetSpawnedPlayerHealths().Count >= 2)
+                    {
+                        break;
+                    }
+                    yield return new WaitForSeconds(0.25f);
+                }
+
+                List<PlayerHealth> players = GetSpawnedPlayerHealths();
+                if (players.Count < 2)
+                {
+                    Debug.LogError($"[LanSmoke] Combat check failed: players={players.Count}");
+                    Application.Quit(3);
+                    yield break;
+                }
+
+                PlayerHealth attacker = players[0];
+                PlayerHealth target = players[1];
+                ulong attackerId = attacker.NetworkObject != null ? attacker.NetworkObject.OwnerClientId : 0;
+
+                Debug.Log($"[LanSmoke] Combat check start players={players.Count} targetHp={target.CurrentHealth.Value}");
+
+                for (int i = 0; i < 5; i++)
+                {
+                    target.TakeDamageServerRpc(20, attackerId);
+                    yield return new WaitForSeconds(0.15f);
+                }
+
+                bool damageOk = target.CurrentHealth.Value == 0;
+                bool deathOk = target.IsDead;
+                Debug.Log($"[LanSmoke] Combat check damageOk={damageOk} deathOk={deathOk} targetHp={target.CurrentHealth.Value}");
+
+                if (!damageOk || !deathOk)
+                {
+                    Application.Quit(4);
+                }
+            }
+
+            private static List<PlayerHealth> GetSpawnedPlayerHealths()
+            {
+                var players = new List<PlayerHealth>();
+                var nm = NetworkManager.Singleton;
+                if (nm == null || nm.SpawnManager == null) return players;
+
+                foreach (NetworkObject netObj in nm.SpawnManager.SpawnedObjectsList)
+                {
+                    if (netObj == null || !netObj.IsSpawned) continue;
+                    if (!netObj.IsPlayerObject) continue;
+
+                    var health = netObj.GetComponent<PlayerHealth>();
+                    if (health != null) players.Add(health);
+                }
+
+                return players;
             }
 
             private static NetworkManager EnsureNetworkManager()

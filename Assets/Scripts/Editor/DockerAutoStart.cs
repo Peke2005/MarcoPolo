@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEditor;
 using System.Diagnostics;
 using System.IO;
+using System.Net.Sockets;
 
 namespace FrentePartido.Editor
 {
@@ -56,11 +57,22 @@ namespace FrentePartido.Editor
 
         private static void StartBackend(string backendPath)
         {
+            if (IsPortOpen("127.0.0.1", 3001))
+            {
+                UnityEngine.Debug.Log("[BackendAutoStart] Auth backend already running on http://localhost:3001");
+                return;
+            }
+
             UnityEngine.Debug.Log("[DockerAutoStart] Starting auth backend...");
-            RunDockerCompose(backendPath, "up -d --build", "Auth backend running on http://localhost:3001");
+            if (RunDockerCompose(backendPath, "up -d --build", "Auth backend running on http://localhost:3001"))
+            {
+                return;
+            }
+
+            StartNodeBackend(backendPath);
         }
 
-        private static void RunDockerCompose(string workingDir, string args, string successMsg)
+        private static bool RunDockerCompose(string workingDir, string args, string successMsg)
         {
             try
             {
@@ -87,16 +99,60 @@ namespace FrentePartido.Editor
                         UnityEngine.Debug.Log($"[DockerAutoStart] {successMsg}");
                     if (!string.IsNullOrEmpty(output))
                         UnityEngine.Debug.Log($"[Docker] {output}");
+                    return true;
                 }
                 else
                 {
                     // docker compose often writes normal output to stderr
                     UnityEngine.Debug.LogWarning($"[DockerAutoStart] Exit code {process.ExitCode}\n{error}");
+                    return false;
                 }
             }
             catch (System.Exception e)
             {
                 UnityEngine.Debug.LogWarning($"[DockerAutoStart] Could not run docker compose: {e.Message}");
+                return false;
+            }
+        }
+
+        private static void StartNodeBackend(string backendPath)
+        {
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = "/c npm install --omit=dev && npm start",
+                    WorkingDirectory = backendPath,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+
+                Process.Start(psi);
+                UnityEngine.Debug.Log("[BackendAutoStart] Docker unavailable. Starting local Node auth backend on http://localhost:3001");
+            }
+            catch (System.Exception e)
+            {
+                UnityEngine.Debug.LogWarning($"[BackendAutoStart] Could not start local Node backend: {e.Message}");
+            }
+        }
+
+        private static bool IsPortOpen(string host, int port)
+        {
+            try
+            {
+                using var client = new TcpClient();
+                var result = client.BeginConnect(host, port, null, null);
+                bool connected = result.AsyncWaitHandle.WaitOne(250);
+                if (connected)
+                {
+                    client.EndConnect(result);
+                }
+                return connected;
+            }
+            catch
+            {
+                return false;
             }
         }
     }

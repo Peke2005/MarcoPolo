@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
+using Unity.Collections;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
@@ -57,10 +59,16 @@ namespace FrentePartido.Networking
         public event Action OnSessionEnded;
         public event Action<ulong> OnPlayerConnected;
         public event Action<ulong> OnPlayerDisconnected;
+        public event Action OnLobbyPlayersChanged;
 
         private NetworkManager _networkManager;
         private float _heartbeatTimer;
         private const float HEARTBEAT_INTERVAL = 15f;
+        private const string LOBBY_UPDATE_MESSAGE = "FP_LOBBY_UPDATE";
+        private const string LOBBY_STATE_MESSAGE = "FP_LOBBY_STATE";
+        private readonly Dictionary<ulong, LobbyPlayerInfo> _lobbyPlayers = new Dictionary<ulong, LobbyPlayerInfo>();
+        private LobbyPlayerInfo _localLobbyInfo;
+        private bool _messagesRegistered;
 
         // ── Singleton Setup ─────────────────────────────────────────
         private void Awake()
@@ -193,12 +201,15 @@ namespace FrentePartido.Networking
                 if (!_networkManager.StartHost())
                 {
                     Debug.LogError("[Session] NetworkManager.StartHost failed.");
+                    ClearLobbyState();
                     await LobbyManager.LeaveLobby();
                     return;
                 }
 
                 IsHost = true;
                 _heartbeatTimer = 0f;
+                RegisterLobbyMessages();
+                SubmitLobbyPlayerState(GameConfig.Preferences.playerName, GameConfig.Preferences.abilityIndex, GameConfig.Preferences.colorIndex, false);
 
                 Debug.Log($"[Session] Host session created. JoinCode: {JoinCode}");
                 OnSessionCreated?.Invoke();
@@ -247,6 +258,8 @@ namespace FrentePartido.Networking
                 }
 
                 IsHost = false;
+                RegisterLobbyMessages();
+                SubmitLobbyPlayerState(GameConfig.Preferences.playerName, GameConfig.Preferences.abilityIndex, GameConfig.Preferences.colorIndex, false);
 
                 Debug.Log($"[Session] Client joining session. JoinCode: {JoinCode}");
                 OnSessionJoined?.Invoke();
@@ -272,6 +285,8 @@ namespace FrentePartido.Networking
                 _networkManager.Shutdown();
             }
 
+            ClearLobbyState();
+
             // Fire-and-forget lobby cleanup — we're about to change scenes anyway
             _ = LobbyManager.LeaveLobby();
 
@@ -288,12 +303,31 @@ namespace FrentePartido.Networking
         private void HandleClientConnected(ulong clientId)
         {
             Debug.Log($"[Session] Client connected: {clientId}");
+            RegisterLobbyMessages();
+
+            if (_networkManager != null && _networkManager.IsServer)
+            {
+                EnsureLobbyPlayer(clientId);
+                BroadcastLobbyState();
+            }
+
+            if (_networkManager != null && clientId == _networkManager.LocalClientId)
+            {
+                SendLocalLobbyInfo();
+            }
+
             OnPlayerConnected?.Invoke(clientId);
         }
 
         private void HandleClientDisconnected(ulong clientId)
         {
             Debug.Log($"[Session] Client disconnected: {clientId}");
+            if (_networkManager != null && _networkManager.IsServer)
+            {
+                _lobbyPlayers.Remove(clientId);
+                BroadcastLobbyState();
+            }
+
             OnPlayerDisconnected?.Invoke(clientId);
 
             // If we are the client and got disconnected, leave session
@@ -311,6 +345,8 @@ namespace FrentePartido.Networking
                 _networkManager.Shutdown();
             }
 
+            ClearLobbyState();
+
             await LobbyManager.LeaveLobby();
 
             JoinCode = null;
@@ -319,10 +355,214 @@ namespace FrentePartido.Networking
 
         private void OnDestroy()
         {
+            UnregisterLobbyMessages();
             if (Instance == this)
             {
                 Instance = null;
             }
+        }
+
+        public readonly struct LobbyPlayerInfo
+        {
+            public readonly ulong ClientId;
+            public readonly string PlayerName;
+            public readonly int AbilityIndex;
+            public readonly int FactionIndex;
+            public readonly bool IsReady;
+
+            public LobbyPlayerInfo(ulong clientId, string playerName, int abilityIndex, int factionIndex, bool isReady)
+            {
+                ClientId = clientId;
+                PlayerName = string.IsNullOrWhiteSpace(playerName) ? "Jugador" : playerName;
+                AbilityIndex = Mathf.Clamp(abilityIndex, 0, 2);
+                FactionIndex = Mathf.Clamp(factionIndex, 0, 1);
+                IsReady = isReady;
+            }
+        }
+
+        public IReadOnlyList<LobbyPlayerInfo> GetLobbyPlayers()
+        {
+            var players = new List<LobbyPlayerInfo>(_lobbyPlayers.Values);
+            players.Sort((a, b) => a.ClientId.CompareTo(b.ClientId));
+            return players;
+        }
+
+        public bool AreLobbyPlayersReady(int expectedPlayers = 2)
+        {
+            if (_lobbyPlayers.Count < expectedPlayers) return false;
+            foreach (var player in _lobbyPlayers.Values)
+            {
+                if (!player.IsReady) return false;
+            }
+            return true;
+        }
+
+        public void SubmitLobbyPlayerState(string playerName, int abilityIndex, int factionIndex, bool isReady)
+        {
+            ulong localId = _networkManager != null ? _networkManager.LocalClientId : 0;
+            _localLobbyInfo = new LobbyPlayerInfo(localId, playerName, abilityIndex, factionIndex, isReady);
+
+            if (_networkManager == null || !_networkManager.IsListening)
+            {
+                return;
+            }
+
+            if (_networkManager.IsServer)
+            {
+                _lobbyPlayers[_networkManager.LocalClientId] = _localLobbyInfo;
+                BroadcastLobbyState();
+            }
+            else
+            {
+                SendLocalLobbyInfo();
+            }
+        }
+
+        private void RegisterLobbyMessages()
+        {
+            if (_messagesRegistered || _networkManager == null || _networkManager.CustomMessagingManager == null)
+            {
+                return;
+            }
+
+            if (_networkManager.IsServer)
+            {
+                _networkManager.CustomMessagingManager.RegisterNamedMessageHandler(LOBBY_UPDATE_MESSAGE, HandleLobbyUpdateMessage);
+            }
+            else
+            {
+                _networkManager.CustomMessagingManager.RegisterNamedMessageHandler(LOBBY_STATE_MESSAGE, HandleLobbyStateMessage);
+            }
+
+            _messagesRegistered = true;
+        }
+
+        private void UnregisterLobbyMessages()
+        {
+            if (!_messagesRegistered || _networkManager == null || _networkManager.CustomMessagingManager == null)
+            {
+                _messagesRegistered = false;
+                return;
+            }
+
+            _networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(LOBBY_UPDATE_MESSAGE);
+            _networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(LOBBY_STATE_MESSAGE);
+            _messagesRegistered = false;
+        }
+
+        private void SendLocalLobbyInfo()
+        {
+            if (_networkManager == null || !_networkManager.IsListening || _networkManager.IsServer ||
+                _networkManager.CustomMessagingManager == null)
+            {
+                return;
+            }
+
+            using var writer = new FastBufferWriter(256, Allocator.Temp);
+            WriteLobbyPlayer(writer, _localLobbyInfo);
+            _networkManager.CustomMessagingManager.SendNamedMessage(LOBBY_UPDATE_MESSAGE, NetworkManager.ServerClientId, writer);
+        }
+
+        private void HandleLobbyUpdateMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            LobbyPlayerInfo info = ReadLobbyPlayer(reader, senderClientId);
+            _lobbyPlayers[senderClientId] = info;
+            BroadcastLobbyState();
+        }
+
+        private void BroadcastLobbyState()
+        {
+            if (_networkManager == null || !_networkManager.IsServer || _networkManager.CustomMessagingManager == null)
+            {
+                return;
+            }
+
+            EnsureLobbyPlayer(_networkManager.LocalClientId);
+
+            foreach (ulong clientId in _networkManager.ConnectedClientsIds)
+            {
+                if (clientId == _networkManager.LocalClientId) continue;
+
+                using var writer = new FastBufferWriter(1024, Allocator.Temp);
+                WriteLobbyState(writer);
+                _networkManager.CustomMessagingManager.SendNamedMessage(LOBBY_STATE_MESSAGE, clientId, writer);
+            }
+
+            OnLobbyPlayersChanged?.Invoke();
+        }
+
+        private void HandleLobbyStateMessage(ulong senderClientId, FastBufferReader reader)
+        {
+            reader.ReadValueSafe(out int count);
+            _lobbyPlayers.Clear();
+
+            for (int i = 0; i < count; i++)
+            {
+                LobbyPlayerInfo info = ReadLobbyPlayer(reader, 0);
+                _lobbyPlayers[info.ClientId] = info;
+            }
+
+            OnLobbyPlayersChanged?.Invoke();
+        }
+
+        private void EnsureLobbyPlayer(ulong clientId)
+        {
+            if (_lobbyPlayers.ContainsKey(clientId)) return;
+
+            string fallbackName = clientId == (_networkManager != null ? _networkManager.LocalClientId : 0)
+                ? GameConfig.Preferences.playerName
+                : $"Jugador {clientId + 1}";
+
+            _lobbyPlayers[clientId] = new LobbyPlayerInfo(clientId, fallbackName, 0, clientId == 0 ? 0 : 1, false);
+        }
+
+        private void ClearLobbyState()
+        {
+            UnregisterLobbyMessages();
+            _lobbyPlayers.Clear();
+            _localLobbyInfo = default;
+            OnLobbyPlayersChanged?.Invoke();
+        }
+
+        private void WriteLobbyState(FastBufferWriter writer)
+        {
+            var players = GetLobbyPlayers();
+            writer.WriteValueSafe(players.Count);
+            foreach (var player in players)
+            {
+                WriteLobbyPlayer(writer, player);
+            }
+        }
+
+        private static void WriteLobbyPlayer(FastBufferWriter writer, LobbyPlayerInfo info)
+        {
+            ulong clientId = info.ClientId;
+            var name = new FixedString64Bytes(string.IsNullOrWhiteSpace(info.PlayerName) ? "Jugador" : info.PlayerName);
+            int ability = info.AbilityIndex;
+            int faction = info.FactionIndex;
+            bool ready = info.IsReady;
+
+            writer.WriteValueSafe(clientId);
+            writer.WriteValueSafe(name);
+            writer.WriteValueSafe(ability);
+            writer.WriteValueSafe(faction);
+            writer.WriteValueSafe(ready);
+        }
+
+        private static LobbyPlayerInfo ReadLobbyPlayer(FastBufferReader reader, ulong senderClientId)
+        {
+            reader.ReadValueSafe(out ulong clientId);
+            reader.ReadValueSafe(out FixedString64Bytes name);
+            reader.ReadValueSafe(out int ability);
+            reader.ReadValueSafe(out int faction);
+            reader.ReadValueSafe(out bool ready);
+
+            if (senderClientId != 0)
+            {
+                clientId = senderClientId;
+            }
+
+            return new LobbyPlayerInfo(clientId, name.ToString(), ability, faction, ready);
         }
     }
 }

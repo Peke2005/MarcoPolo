@@ -1,4 +1,6 @@
-const express = require('express');
+﻿const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const { Pool } = require('pg');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
@@ -16,13 +18,140 @@ const pool = new Pool({
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
 const SALT_ROUNDS = 10;
+const STORE_MODE = (process.env.AUTH_STORE || 'auto').toLowerCase();
+const DATA_FILE = process.env.AUTH_DATA_FILE || path.join(__dirname, '..', 'data', 'users.json');
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
+let checkedPostgres = false;
+let useFileStore = STORE_MODE === 'file';
+let fileStore;
+
+function loadFileStore() {
+  if (fileStore) return fileStore;
+
+  fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
+  if (!fs.existsSync(DATA_FILE)) {
+    fs.writeFileSync(DATA_FILE, JSON.stringify({ nextId: 1, users: [] }, null, 2));
+  }
+
+  fileStore = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+  fileStore.nextId = fileStore.nextId || 1;
+  fileStore.users = Array.isArray(fileStore.users) ? fileStore.users : [];
+  return fileStore;
+}
+
+function saveFileStore() {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(fileStore, null, 2));
+}
+
+async function ensureStore() {
+  if (useFileStore || checkedPostgres) return;
+  checkedPostgres = true;
+
+  if (STORE_MODE === 'postgres') return;
+
+  try {
+    await pool.query('SELECT 1');
+  } catch (err) {
+    useFileStore = true;
+    loadFileStore();
+    console.warn(`[Auth API] Postgres unavailable. Using local JSON store: ${DATA_FILE}`);
+  }
+}
+
+async function findExistingUser(username, email) {
+  await ensureStore();
+
+  if (useFileStore) {
+    const store = loadFileStore();
+    return store.users.find(u => u.username === username || u.email === email) || null;
+  }
+
+  const result = await pool.query(
+    'SELECT id FROM users WHERE username = $1 OR email = $2',
+    [username, email]
+  );
+  return result.rows[0] || null;
+}
+
+async function findLoginUser(identifier) {
+  await ensureStore();
+
+  if (useFileStore) {
+    const store = loadFileStore();
+    return store.users.find(u => u.username === identifier || u.email === identifier) || null;
+  }
+
+  const result = await pool.query(
+    'SELECT id, username, display_name, password_hash FROM users WHERE username = $1 OR email = $1',
+    [identifier]
+  );
+  return result.rows[0] || null;
+}
+
+async function findUserById(id) {
+  await ensureStore();
+
+  if (useFileStore) {
+    const store = loadFileStore();
+    return store.users.find(u => u.id === id) || null;
+  }
+
+  const result = await pool.query(
+    'SELECT id, username, display_name FROM users WHERE id = $1',
+    [id]
+  );
+  return result.rows[0] || null;
+}
+
+async function insertUser(username, email, passwordHash, displayName) {
+  await ensureStore();
+
+  if (useFileStore) {
+    const store = loadFileStore();
+    const user = {
+      id: store.nextId++,
+      username,
+      email,
+      password_hash: passwordHash,
+      display_name: displayName || username,
+      created_at: new Date().toISOString(),
+      last_login: null,
+    };
+    store.users.push(user);
+    saveFileStore();
+    return user;
+  }
+
+  const result = await pool.query(
+    `INSERT INTO users (username, email, password_hash, display_name)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id, username, display_name`,
+    [username, email, passwordHash, displayName || username]
+  );
+  return result.rows[0];
+}
+
+async function updateLastLogin(userId) {
+  await ensureStore();
+
+  if (useFileStore) {
+    const store = loadFileStore();
+    const user = store.users.find(u => u.id === userId);
+    if (user) {
+      user.last_login = new Date().toISOString();
+      saveFileStore();
+    }
+    return;
+  }
+
+  await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [userId]);
+}
+
+app.get('/health', async (req, res) => {
+  await ensureStore();
+  res.json({ status: 'ok', store: useFileStore ? 'file' : 'postgres' });
 });
 
-// Register
 app.post('/auth/register', async (req, res) => {
   const { username, email, password, displayName } = req.body;
 
@@ -35,24 +164,14 @@ app.post('/auth/register', async (req, res) => {
   }
 
   try {
-    const existing = await pool.query(
-      'SELECT id FROM users WHERE username = $1 OR email = $2',
-      [username, email]
-    );
+    const existing = await findExistingUser(username, email);
 
-    if (existing.rows.length > 0) {
+    if (existing) {
       return res.status(409).json({ error: 'Usuario o email ya existe' });
     }
 
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-    const result = await pool.query(
-      `INSERT INTO users (username, email, password_hash, display_name)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, username, display_name`,
-      [username, email, passwordHash, displayName || username]
-    );
-
-    const user = result.rows[0];
+    const user = await insertUser(username, email, passwordHash, displayName || username);
     const token = jwt.sign(
       { userId: user.id, username: user.username },
       JWT_SECRET,
@@ -71,7 +190,6 @@ app.post('/auth/register', async (req, res) => {
   }
 });
 
-// Login
 app.post('/auth/login', async (req, res) => {
   const { username, password } = req.body;
 
@@ -80,23 +198,19 @@ app.post('/auth/login', async (req, res) => {
   }
 
   try {
-    const result = await pool.query(
-      'SELECT id, username, display_name, password_hash FROM users WHERE username = $1 OR email = $1',
-      [username]
-    );
+    const user = await findLoginUser(username);
 
-    if (result.rows.length === 0) {
-      return res.status(401).json({ error: 'Credenciales inválidas' });
+    if (!user) {
+      return res.status(401).json({ error: 'Credenciales invalidas' });
     }
 
-    const user = result.rows[0];
     const valid = await bcrypt.compare(password, user.password_hash);
 
     if (!valid) {
-      return res.status(401).json({ error: 'Credenciales inválidas' });
+      return res.status(401).json({ error: 'Credenciales invalidas' });
     }
 
-    await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+    await updateLastLogin(user.id);
 
     const token = jwt.sign(
       { userId: user.id, username: user.username },
@@ -116,7 +230,6 @@ app.post('/auth/login', async (req, res) => {
   }
 });
 
-// Verify token
 app.get('/auth/verify', async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -126,28 +239,23 @@ app.get('/auth/verify', async (req, res) => {
   try {
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await findUserById(decoded.userId);
 
-    const result = await pool.query(
-      'SELECT id, username, display_name FROM users WHERE id = $1',
-      [decoded.userId]
-    );
-
-    if (result.rows.length === 0) {
+    if (!user) {
       return res.status(401).json({ error: 'Usuario no encontrado' });
     }
 
-    const user = result.rows[0];
     res.json({
       userId: user.id,
       username: user.username,
       displayName: user.display_name,
     });
   } catch (err) {
-    return res.status(401).json({ error: 'Token inválido o expirado' });
+    return res.status(401).json({ error: 'Token invalido o expirado' });
   }
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`[Auth API] Running on port ${PORT}`);
 });

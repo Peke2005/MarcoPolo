@@ -56,6 +56,7 @@ namespace FrentePartido.Auth
             try
             {
                 using var request = UnityWebRequest.Get($"{GetBaseUrl()}/auth/verify");
+                request.timeout = 5;
                 request.SetRequestHeader("Authorization", $"Bearer {savedToken}");
                 request.SetRequestHeader("Content-Type", "application/json");
 
@@ -65,6 +66,8 @@ namespace FrentePartido.Auth
                 if (request.result != UnityWebRequest.Result.Success)
                 {
                     PlayerPrefs.DeleteKey("auth_token");
+                    PlayerPrefs.Save();
+                    Debug.LogWarning($"[Auth] Auto-login skipped: {DescribeRequestError(request)}");
                     return false;
                 }
 
@@ -77,6 +80,8 @@ namespace FrentePartido.Auth
             }
             catch
             {
+                PlayerPrefs.DeleteKey("auth_token");
+                PlayerPrefs.Save();
                 return false;
             }
         }
@@ -86,6 +91,7 @@ namespace FrentePartido.Auth
             try
             {
                 using var request = new UnityWebRequest($"{GetBaseUrl()}{endpoint}", "POST");
+                request.timeout = 8;
                 byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(jsonBody);
                 request.uploadHandler = new UploadHandlerRaw(bodyRaw);
                 request.downloadHandler = new DownloadHandlerBuffer();
@@ -96,8 +102,7 @@ namespace FrentePartido.Auth
 
                 if (request.result != UnityWebRequest.Result.Success)
                 {
-                    var errorResp = JsonUtility.FromJson<ErrorResponse>(request.downloadHandler.text);
-                    return new AuthResult { success = false, error = errorResp?.error ?? "Error de conexion" };
+                    return new AuthResult { success = false, error = DescribeRequestError(request) };
                 }
 
                 var response = JsonUtility.FromJson<AuthResponse>(request.downloadHandler.text);
@@ -126,6 +131,33 @@ namespace FrentePartido.Auth
             }
 
             return configuredUrl.Trim().TrimEnd('/');
+        }
+
+        private static string DescribeRequestError(UnityWebRequest request)
+        {
+            string body = request.downloadHandler?.text;
+            if (!string.IsNullOrWhiteSpace(body))
+            {
+                try
+                {
+                    var errorResp = JsonUtility.FromJson<ErrorResponse>(body);
+                    if (!string.IsNullOrWhiteSpace(errorResp?.error))
+                    {
+                        return errorResp.error;
+                    }
+                }
+                catch
+                {
+                    // Body is not JSON; fall back to UnityWebRequest error.
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.error))
+            {
+                return $"No se puede contactar con auth ({GetBaseUrl()}): {request.error}";
+            }
+
+            return $"Error auth HTTP {request.responseCode}";
         }
 
         [Serializable]

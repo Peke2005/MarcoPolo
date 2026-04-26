@@ -48,3 +48,7 @@ crashlytics-build.properties
 # Node modules (MCP server)
 node_modules/
 package-lock.json
+
+# Local auth backend runtime data
+Backend/data/
+Backend/*.log

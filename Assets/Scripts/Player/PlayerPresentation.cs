@@ -14,6 +14,8 @@ namespace FrentePartido.Player
         [Header("Sprite References")]
         [SerializeField] private SpriteRenderer mainSprite;
         [SerializeField] private SpriteRenderer weaponSprite;
+        [SerializeField] private SpriteRenderer ringSprite;
+        [SerializeField] private SpriteRenderer shadowSprite;
 
         [Header("Faction Colors")]
         [SerializeField] private Color blueColor = new Color(0.2f, 0.4f, 1f, 1f);
@@ -34,6 +36,7 @@ namespace FrentePartido.Player
         private PlayerHealth _health;
         private Color _baseSpriteColor;
         private Color _baseWeaponColor;
+        private Color _baseRingColor;
         private Coroutine _flashCoroutine;
         private Vector3 _lastPos;
         private float _bobT;
@@ -42,6 +45,7 @@ namespace FrentePartido.Player
         {
             _health = GetComponent<PlayerHealth>();
             EnsureSpriteRenderers();
+            EnsureVisualAccents();
             ApplyBaseSprites();
         }
 
@@ -74,10 +78,47 @@ namespace FrentePartido.Player
             }
         }
 
+        private void EnsureVisualAccents()
+        {
+            if (shadowSprite == null)
+            {
+                Transform shadow = transform.Find("Shadow");
+                if (shadow == null)
+                {
+                    var go = new GameObject("Shadow");
+                    go.transform.SetParent(transform, false);
+                    shadow = go.transform;
+                }
+
+                shadow.localPosition = new Vector3(0f, -0.06f, 0f);
+                shadow.localScale = new Vector3(1.15f, 0.62f, 1f);
+                shadowSprite = shadow.GetComponent<SpriteRenderer>();
+                if (shadowSprite == null) shadowSprite = shadow.gameObject.AddComponent<SpriteRenderer>();
+            }
+
+            if (ringSprite == null)
+            {
+                Transform ring = transform.Find("ReadabilityRing");
+                if (ring == null)
+                {
+                    var go = new GameObject("ReadabilityRing");
+                    go.transform.SetParent(transform, false);
+                    ring = go.transform;
+                }
+
+                ring.localPosition = new Vector3(0f, -0.02f, 0f);
+                ring.localScale = Vector3.one * 1.15f;
+                ringSprite = ring.GetComponent<SpriteRenderer>();
+                if (ringSprite == null) ringSprite = ring.gameObject.AddComponent<SpriteRenderer>();
+            }
+        }
+
         private static Sprite _blueBodySprite;
         private static Sprite _redBodySprite;
         private static Sprite _bodySprite;
         private static Sprite _gunSprite;
+        private static Sprite _ringSpriteAsset;
+        private static Sprite _shadowSpriteAsset;
 
         private void ApplyBaseSprites()
         {
@@ -102,6 +143,19 @@ namespace FrentePartido.Player
                 weaponSprite.transform.localScale = Vector3.one * 1.05f;
                 weaponSprite.color = new Color(0.9f, 0.95f, 1f, 1f);
                 weaponSprite.sortingOrder = 11;
+            }
+            if (shadowSprite != null)
+            {
+                if (_shadowSpriteAsset == null) _shadowSpriteAsset = BuildSoftDiscSprite();
+                shadowSprite.sprite = _shadowSpriteAsset;
+                shadowSprite.color = new Color(0f, 0f, 0f, 0.34f);
+                shadowSprite.sortingOrder = 7;
+            }
+            if (ringSprite != null)
+            {
+                if (_ringSpriteAsset == null) _ringSpriteAsset = BuildRingSprite();
+                ringSprite.sprite = _ringSpriteAsset;
+                ringSprite.sortingOrder = 8;
             }
         }
 
@@ -185,6 +239,59 @@ namespace FrentePartido.Player
             return Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.2f, 0.5f), 48f);
         }
 
+        private static Sprite BuildRingSprite()
+        {
+            int size = 96;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            var px = new Color[size * size];
+            Vector2 center = new Vector2((size - 1) * 0.5f, (size - 1) * 0.5f);
+            float outer = size * 0.42f;
+            float inner = size * 0.34f;
+
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float d = Vector2.Distance(new Vector2(x, y), center);
+                float a = 0f;
+                if (d <= outer && d >= inner)
+                {
+                    float edge = Mathf.Min(outer - d, d - inner);
+                    a = Mathf.Clamp01(edge / 2.5f) * 0.95f;
+                }
+                px[y * size + x] = new Color(1f, 1f, 1f, a);
+            }
+
+            tex.SetPixels(px);
+            tex.filterMode = FilterMode.Bilinear;
+            tex.wrapMode = TextureWrapMode.Clamp;
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 96f, 0, SpriteMeshType.FullRect);
+        }
+
+        private static Sprite BuildSoftDiscSprite()
+        {
+            int size = 96;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            var px = new Color[size * size];
+            Vector2 center = new Vector2((size - 1) * 0.5f, (size - 1) * 0.5f);
+            float radius = size * 0.42f;
+
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float d = Vector2.Distance(new Vector2(x, y), center);
+                float a = Mathf.Clamp01(1f - d / radius);
+                a = Mathf.Pow(a, 1.8f);
+                px[y * size + x] = new Color(1f, 1f, 1f, a);
+            }
+
+            tex.SetPixels(px);
+            tex.filterMode = FilterMode.Bilinear;
+            tex.wrapMode = TextureWrapMode.Clamp;
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 96f, 0, SpriteMeshType.FullRect);
+        }
+
         public override void OnNetworkSpawn()
         {
             base.OnNetworkSpawn();
@@ -193,6 +300,7 @@ namespace FrentePartido.Player
 
             // Apply initial faction color
             ApplyFactionColor((PlayerFaction)Faction.Value);
+            ApplyRingColor((PlayerFaction)Faction.Value);
 
             // Subscribe to health events
             if (_health != null)
@@ -218,6 +326,7 @@ namespace FrentePartido.Player
         private void OnFactionChanged(byte oldValue, byte newValue)
         {
             ApplyFactionColor((PlayerFaction)newValue);
+            ApplyRingColor((PlayerFaction)newValue);
         }
 
         private void ApplyFactionColor(PlayerFaction faction)
@@ -247,6 +356,17 @@ namespace FrentePartido.Player
             }
         }
 
+        private void ApplyRingColor(PlayerFaction faction)
+        {
+            if (ringSprite == null) return;
+
+            Color factionColor = faction == PlayerFaction.Blue ? blueColor : redColor;
+            Color ringColor = IsOwner ? new Color(1f, 0.86f, 0.18f, 0.95f) : factionColor;
+            ringColor.a = IsOwner ? 0.95f : 0.75f;
+            ringSprite.color = ringColor;
+            _baseRingColor = ringColor;
+        }
+
         /// <summary>
         /// Brief flash effect when taking damage.
         /// </summary>
@@ -264,6 +384,8 @@ namespace FrentePartido.Player
                 mainSprite.color = flashColor;
             if (weaponSprite != null)
                 weaponSprite.color = flashColor;
+            if (ringSprite != null)
+                ringSprite.color = new Color(1f, 1f, 1f, 1f);
 
             yield return new WaitForSeconds(flashDuration);
 
@@ -271,6 +393,8 @@ namespace FrentePartido.Player
                 mainSprite.color = _baseSpriteColor;
             if (weaponSprite != null)
                 weaponSprite.color = _baseWeaponColor;
+            if (ringSprite != null)
+                ringSprite.color = _baseRingColor;
 
             _flashCoroutine = null;
         }
@@ -290,6 +414,12 @@ namespace FrentePartido.Player
 
             if (weaponSprite != null)
                 weaponSprite.enabled = false;
+            if (ringSprite != null)
+            {
+                Color ringColor = _baseRingColor;
+                ringColor.a = 0.25f;
+                ringSprite.color = ringColor;
+            }
         }
 
         /// <summary>
@@ -310,6 +440,13 @@ namespace FrentePartido.Player
 
             if (weaponSprite != null)
                 weaponSprite.enabled = true;
+            if (ringSprite != null)
+            {
+                ringSprite.enabled = true;
+                ApplyRingColor((PlayerFaction)Faction.Value);
+            }
+            if (shadowSprite != null)
+                shadowSprite.enabled = true;
         }
 
         private void OnPlayerDied(ulong killerClientId)

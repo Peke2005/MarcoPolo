@@ -206,7 +206,7 @@ namespace FrentePartido.Abilities
             _exploded = true;
 
             // Deal damage
-            targetHealth.TakeDamageServerRpc(_damage, _ownerClientId);
+            targetHealth.ApplyDamageServer(_damage, _ownerClientId);
 
             Debug.Log($"[ProximityMine] Exploded! Dealt {_damage} damage to player {targetClientId}");
 

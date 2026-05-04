@@ -12,7 +12,8 @@ namespace FrentePartido.Pickups
             var health = player.GetComponentInParent<Player.PlayerHealth>();
             if (health != null)
             {
-                health.AddArmorServerRpc(_balance.armorPickupAmount);
+                int amount = _balance != null ? _balance.armorPickupAmount : 25;
+                health.AddArmorServer(amount);
             }
         }
     }

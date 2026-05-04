@@ -47,7 +47,7 @@ namespace FrentePartido.Match
                 float dist = Vector2.Distance(health.transform.position, center);
                 if (dist > _safeZoneRadius)
                 {
-                    health.TakeDamageServerRpc(tickDamage, 0);
+                    health.ApplyDamageServer(tickDamage, 0);
                 }
             }
         }

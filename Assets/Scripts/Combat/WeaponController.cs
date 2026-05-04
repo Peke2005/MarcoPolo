@@ -160,12 +160,12 @@ namespace FrentePartido.Combat
                 if (targetHealth == null)
                     targetHealth = hit.collider.GetComponentInParent<PlayerHealth>();
 
-                if (targetHealth != null && !targetHealth.IsDead)
+                if (targetHealth != null && targetHealth != _playerHealth && !targetHealth.IsDead)
                 {
                     float distance = hit.distance;
                     int damage = DamageDealer.CalculateDamage(weaponData.damage, distance, weaponData.range);
                     ulong sourceId = rpcParams.Receive.SenderClientId;
-                    targetHealth.TakeDamageServerRpc(damage, sourceId);
+                    targetHealth.ApplyDamageServer(damage, sourceId);
                 }
             }
 

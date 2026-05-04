@@ -17,6 +17,14 @@ namespace FrentePartido.Editor
             "Assets/Scenes/05_PostMatch.unity"
         };
 
+        private static readonly string[] SmokeScenes =
+        {
+            "Assets/Scenes/04_Game.unity",
+            "Assets/Scenes/02_MainMenu.unity",
+            "Assets/Scenes/03_Lobby.unity",
+            "Assets/Scenes/05_PostMatch.unity"
+        };
+
         public static void BuildGameSceneWindows()
         {
             string outputDir = Path.GetFullPath("Builds/Smoke/MarcoPoloSmoke");
@@ -24,7 +32,7 @@ namespace FrentePartido.Editor
 
             var options = new BuildPlayerOptions
             {
-                scenes = new[] { "Assets/Scenes/04_Game.unity" },
+                scenes = SmokeScenes,
                 locationPathName = Path.Combine(outputDir, "MarcoPoloSmoke.exe"),
                 target = BuildTarget.StandaloneWindows64,
                 options = BuildOptions.Development

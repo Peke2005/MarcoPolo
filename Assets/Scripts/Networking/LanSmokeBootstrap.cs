@@ -149,7 +149,7 @@ namespace FrentePartido.Networking
 
                 for (int i = 0; i < 5; i++)
                 {
-                    target.TakeDamageServerRpc(20, attackerId);
+                    target.ApplyDamageServer(20, attackerId);
                     yield return new WaitForSeconds(0.15f);
                 }
 

@@ -71,6 +71,26 @@ namespace FrentePartido.Core
             PopulateDecor();
         }
 
+        /// <summary>Remove breakable runtime cover for sudden death; next round rebuilds it.</summary>
+        public static int BreakSuddenDeathCover()
+        {
+            GameObject root = GameObject.Find("~ArenaDecor");
+            if (root == null) return 0;
+
+            var toDestroy = new List<GameObject>();
+            foreach (Transform child in root.transform)
+            {
+                string n = child.gameObject.name;
+                if (n.StartsWith("Decor_Crate") || n.StartsWith("Decor_Barrel"))
+                    toDestroy.Add(child.gameObject);
+            }
+
+            foreach (GameObject go in toDestroy)
+                Object.Destroy(go);
+
+            return toDestroy.Count;
+        }
+
         // ── Arena builder (runs only if scene has no Floor/Walls) ────
         private static void BuildArenaIfMissing()
         {
@@ -645,6 +665,10 @@ namespace FrentePartido.Core
             // Anchor timer + score to top-left so they stay there at any window size.
             AnchorTopLeft(hud, "RoundTimerText", new Vector2(20f, -20f), TMPro.TextAlignmentOptions.TopLeft);
             AnchorTopLeft(hud, "RoundScoreText", new Vector2(20f, -70f), TMPro.TextAlignmentOptions.TopLeft);
+            AnchorBottomRight(hud, "AmmoText", new Vector2(-30f, 46f), new Vector2(110f, 34f), TMPro.TextAlignmentOptions.BottomRight);
+            AnchorBottomRightImage(hud, "ReloadBar", new Vector2(-30f, 24f), new Vector2(120f, 10f));
+            AnchorBottomRightImage(hud, "GrenadeIcon", new Vector2(-180f, 42f), new Vector2(34f, 34f));
+            AnchorBottomRightImage(hud, "AbilityCooldown", new Vector2(-232f, 42f), new Vector2(42f, 42f));
 
             foreach (var image in hud.GetComponentsInChildren<Image>(true))
             {
@@ -688,6 +712,44 @@ namespace FrentePartido.Core
             if (tmp != null) tmp.alignment = align;
         }
 
+        private static void AnchorBottomRight(GameObject hud, string childName, Vector2 anchoredPos, Vector2 size, TMPro.TextAlignmentOptions align)
+        {
+            Transform t = FindDeepChild(hud.transform, childName);
+            if (t == null) return;
+            var rt = t as RectTransform;
+            if (rt == null) return;
+
+            if (t.parent != hud.transform) t.SetParent(hud.transform, false);
+            rt.anchorMin = new Vector2(1f, 0f);
+            rt.anchorMax = new Vector2(1f, 0f);
+            rt.pivot = new Vector2(1f, 0f);
+            rt.anchoredPosition = anchoredPos;
+            rt.sizeDelta = size;
+
+            var tmp = t.GetComponent<TMPro.TMP_Text>();
+            if (tmp != null)
+            {
+                tmp.alignment = align;
+                tmp.fontSize = Mathf.Max(tmp.fontSize, 26f);
+                tmp.color = new Color(0.94f, 1f, 0.96f, 0.98f);
+            }
+        }
+
+        private static void AnchorBottomRightImage(GameObject hud, string childName, Vector2 anchoredPos, Vector2 size)
+        {
+            Transform t = FindDeepChild(hud.transform, childName);
+            if (t == null) return;
+            var rt = t as RectTransform;
+            if (rt == null) return;
+
+            if (t.parent != hud.transform) t.SetParent(hud.transform, false);
+            rt.anchorMin = new Vector2(1f, 0f);
+            rt.anchorMax = new Vector2(1f, 0f);
+            rt.pivot = new Vector2(1f, 0f);
+            rt.anchoredPosition = anchoredPos;
+            rt.sizeDelta = size;
+        }
+
         private static Transform FindDeepChild(Transform parent, string name)
         {
             if (parent.name == name) return parent;
@@ -710,14 +772,23 @@ namespace FrentePartido.Core
             var scaler = go.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
 
-            var img = new GameObject("Dot", typeof(RectTransform), typeof(Image));
-            img.transform.SetParent(go.transform, false);
-            var rt = img.GetComponent<RectTransform>();
-            rt.sizeDelta = new Vector2(10f, 10f);
-            var image = img.GetComponent<Image>();
-            image.sprite = _spawnSprite;
-            image.color = new Color(1f, 0.9f, 0.3f, 0.85f);
-            image.raycastTarget = false;
+            var outline = new GameObject("Outline", typeof(RectTransform), typeof(Image));
+            outline.transform.SetParent(go.transform, false);
+            var outlineRt = outline.GetComponent<RectTransform>();
+            outlineRt.sizeDelta = new Vector2(24f, 24f);
+            var outlineImage = outline.GetComponent<Image>();
+            outlineImage.sprite = _spawnSprite;
+            outlineImage.color = new Color(0f, 0f, 0f, 0.72f);
+            outlineImage.raycastTarget = false;
+
+            var dot = new GameObject("Dot", typeof(RectTransform), typeof(Image));
+            dot.transform.SetParent(go.transform, false);
+            var dotRt = dot.GetComponent<RectTransform>();
+            dotRt.sizeDelta = new Vector2(14f, 14f);
+            var dotImage = dot.GetComponent<Image>();
+            dotImage.sprite = _spawnSprite;
+            dotImage.color = new Color(0f, 1f, 1f, 1f);
+            dotImage.raycastTarget = false;
 
             go.AddComponent<CrosshairFollow>();
             Cursor.visible = false;
@@ -776,18 +847,22 @@ namespace FrentePartido.Core
     /// <summary>Moves the crosshair Image to the mouse position each frame.</summary>
     public class CrosshairFollow : MonoBehaviour
     {
-        private RectTransform _dot;
+        private RectTransform[] _parts;
 
         private void Awake()
         {
-            _dot = transform.GetChild(0) as RectTransform;
+            _parts = GetComponentsInChildren<RectTransform>(true);
         }
 
         private void Update()
         {
-            if (_dot == null) return;
+            if (_parts == null || _parts.Length == 0) return;
             Vector2 pos = Mouse.current != null ? Mouse.current.position.ReadValue() : Vector2.zero;
-            _dot.position = pos;
+            for (int i = 0; i < _parts.Length; i++)
+            {
+                if (_parts[i] != null && _parts[i].transform != transform)
+                    _parts[i].position = pos;
+            }
         }
 
         private void OnDestroy()

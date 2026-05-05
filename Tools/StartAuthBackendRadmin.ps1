@@ -16,46 +16,42 @@ if ([string]::IsNullOrWhiteSpace($RadminIp)) {
     $RadminIp = '26.234.30.190'
 }
 
-$localOk = $false
-try {
-    curl.exe -sS --max-time 2 "http://127.0.0.1:$Port/health" | Out-Null
-    $localOk = $LASTEXITCODE -eq 0
-} catch {
-    $localOk = $false
+$dockerDesktop = Join-Path $env:ProgramFiles 'Docker\Docker\Docker Desktop.exe'
+if (-not (Get-Process 'Docker Desktop' -ErrorAction SilentlyContinue) -and (Test-Path $dockerDesktop)) {
+    Write-Host "Starting Docker Desktop..."
+    Start-Process -FilePath $dockerDesktop -WindowStyle Hidden
 }
 
-if ($localOk) {
-    Write-Host "Auth backend already running on http://127.0.0.1:$Port"
-} else {
-    Write-Host "Starting auth backend Docker in $backend"
-    Push-Location $backend
-    try {
-        docker compose up -d --build
-    } catch {
-        Write-Warning "Docker start failed. If Docker Desktop is closed, open it or start backend manually. $($_.Exception.Message)"
-    } finally {
-        Pop-Location
+Write-Host "Waiting for Docker daemon..."
+$dockerReady = $false
+for ($i = 0; $i -lt 60; $i++) {
+    docker info *> $null
+    if ($LASTEXITCODE -eq 0) {
+        $dockerReady = $true
+        break
     }
+    Start-Sleep -Seconds 2
+}
+if (-not $dockerReady) {
+    throw "Docker daemon not ready. Open Docker Desktop and wait until it says Running."
+}
 
-    try {
-        curl.exe -sS --max-time 2 "http://127.0.0.1:$Port/health" | Out-Null
-        $localOk = $LASTEXITCODE -eq 0
-    } catch {
-        $localOk = $false
+$listeners = netstat -ano | Select-String ":$Port\s" | Where-Object { $_.Line -match 'LISTENING' }
+foreach ($listener in $listeners) {
+    $listenerPid = [int](($listener.Line -split '\s+')[-1])
+    $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$listenerPid" -ErrorAction SilentlyContinue
+    if ($proc -and $proc.Name -match '^node\.exe$' -and $proc.CommandLine -match 'src/server\.js') {
+        Write-Host "Stopping local Node auth backend on port $Port (PID $listenerPid). Docker will own this port."
+        Stop-Process -Id $listenerPid -Force
     }
+}
 
-    if (-not $localOk) {
-        $node = Get-Command node -ErrorAction SilentlyContinue
-        if ($node) {
-            $log = Join-Path $backend 'auth-server.log'
-            $errLog = Join-Path $backend 'auth-server.err.log'
-            Write-Host "Docker unavailable. Starting local Node backend. Log: $log"
-            Start-Process -FilePath $node.Source -ArgumentList @('src/server.js') -WorkingDirectory $backend -WindowStyle Hidden -RedirectStandardOutput $log -RedirectStandardError $errLog
-            Start-Sleep -Seconds 2
-        } else {
-            Write-Warning "Node.js not found. Install Node or start Docker Desktop."
-        }
-    }
+Write-Host "Starting auth backend Docker in $backend"
+Push-Location $backend
+try {
+    docker compose up -d --build
+} finally {
+    Pop-Location
 }
 
 try {

@@ -1,5 +1,5 @@
 param(
-    [string]$RadminIp = '26.17.117.206',
+    [string]$RadminIp = '',
     [int]$Port = 3001
 )
 
@@ -7,12 +7,35 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $backend = Join-Path $repo 'Backend'
 
-Write-Host "Starting auth backend Docker in $backend"
-Push-Location $backend
+if ([string]::IsNullOrWhiteSpace($RadminIp)) {
+    $RadminIp = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Where-Object { $_.IPAddress -like '26.*' -and $_.InterfaceAlias -like '*Radmin*' } |
+        Select-Object -First 1 -ExpandProperty IPAddress)
+}
+if ([string]::IsNullOrWhiteSpace($RadminIp)) {
+    $RadminIp = '26.234.30.190'
+}
+
+$localOk = $false
 try {
-    docker compose up -d --build
-} finally {
-    Pop-Location
+    curl.exe -sS --max-time 2 "http://127.0.0.1:$Port/health" | Out-Null
+    $localOk = $LASTEXITCODE -eq 0
+} catch {
+    $localOk = $false
+}
+
+if ($localOk) {
+    Write-Host "Auth backend already running on http://127.0.0.1:$Port"
+} else {
+    Write-Host "Starting auth backend Docker in $backend"
+    Push-Location $backend
+    try {
+        docker compose up -d --build
+    } catch {
+        Write-Warning "Docker start failed. If Docker Desktop is closed, open it or start backend manually. $($_.Exception.Message)"
+    } finally {
+        Pop-Location
+    }
 }
 
 try {
@@ -29,4 +52,5 @@ Write-Host 'Local health:'
 curl.exe -sS --max-time 5 "http://127.0.0.1:$Port/health"
 Write-Host "`nRadmin health ($RadminIp):"
 curl.exe -sS --max-time 5 "http://$RadminIp`:$Port/health"
-Write-Host "`nIf Radmin health fails: check Radmin VPN, Docker, and Windows Firewall on this PC."
+Write-Host "`nFriend auth URL should be: http://$RadminIp`:$Port"
+Write-Host "If Radmin health fails: check Radmin VPN and Windows Firewall on this PC."

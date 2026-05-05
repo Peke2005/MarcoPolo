@@ -48,6 +48,43 @@ namespace FrentePartido.Match
             _suddenDeath = GetComponent<SuddenDeathController>();
         }
 
+        private void Update()
+        {
+            // Auto-register players on the server once both have spawned. RegisterPlayers
+            // is not called from anywhere else, so without this round end / death
+            // detection never fires.
+            if (!IsServer) return;
+            if (_player1Health != null && _player2Health != null) return;
+
+            var gs = Networking.NetworkGameState.Instance;
+            if (gs == null) return;
+
+            ulong p1Id = gs.Player1ClientId.Value;
+            ulong p2Id = gs.Player2ClientId.Value;
+            if (p1Id == ulong.MaxValue || p2Id == ulong.MaxValue) return;
+
+            var nm = NetworkManager.Singleton;
+            if (nm == null || nm.SpawnManager == null) return;
+
+            Player.PlayerHealth h1 = null;
+            Player.PlayerHealth h2 = null;
+            foreach (var kv in nm.SpawnManager.SpawnedObjects)
+            {
+                var obj = kv.Value;
+                if (obj == null || !obj.IsPlayerObject) continue;
+                var hp = obj.GetComponent<Player.PlayerHealth>();
+                if (hp == null) continue;
+                if (obj.OwnerClientId == p1Id) h1 = hp;
+                else if (obj.OwnerClientId == p2Id) h2 = hp;
+            }
+
+            if (h1 != null && h2 != null)
+            {
+                RegisterPlayers(h1, p1Id, h2, p2Id);
+                Debug.Log("[Round] Auto-registered both players.");
+            }
+        }
+
         public void RegisterPlayers(Player.PlayerHealth p1, ulong p1Id, Player.PlayerHealth p2, ulong p2Id)
         {
             _player1Health = p1;
@@ -97,48 +134,38 @@ namespace FrentePartido.Match
                 yield return null;
             }
 
-            if (!_roundActive) yield break; // Round ended by kill or capture
+            if (!_roundActive) yield break; // Round ended early by a kill.
 
-            // Time's up - evaluate winner
-            ulong winner = WinConditionEvaluator.EvaluateRoundWinner(
-                _player1Health, _player2Health, _beacon,
-                _player1ClientId, _player2ClientId);
-
-            if (winner == 0)
-            {
-                // Sudden death
-                yield return StartCoroutine(SuddenDeathSequence());
-            }
-            else
-            {
-                EndRound(winner);
-            }
+            // Time expired without a kill -> sudden death: destroy all cover and let
+            // them keep fighting. Round still ends only on a kill.
+            yield return StartCoroutine(SuddenDeathSequence());
         }
 
         private IEnumerator SuddenDeathSequence()
         {
             State.Value = RoundState.SuddenDeath;
-            float timer = _balance.suddenDeathDuration;
+            RoundTimer.Value = 0f;
 
             if (_suddenDeath != null)
                 _suddenDeath.StartSuddenDeath();
 
             AnnounceSuddenDeathClientRpc();
 
-            while (timer > 0f && _roundActive)
+            // No timer: round only ends when a kill fires HandlePlayerDied.
+            // Hard cap as safety so a stuck round never hangs forever.
+            float guard = 60f;
+            while (_roundActive && guard > 0f)
             {
-                timer -= Time.deltaTime;
-                RoundTimer.Value = timer;
+                guard -= Time.deltaTime;
                 yield return null;
             }
 
             if (!_roundActive) yield break;
 
-            ulong winner = WinConditionEvaluator.EvaluateSuddenDeathWinner(
-                _player1Health, _player2Health, _player1ClientId, _player2ClientId);
-
-            if (winner == 0) winner = _player1ClientId; // Fallback: no draws
-
+            // Stuck (no kill in 60s of sudden death) -> killer is whoever has more HP.
+            int hp1 = _player1Health != null ? _player1Health.CurrentHealth.Value : 0;
+            int hp2 = _player2Health != null ? _player2Health.CurrentHealth.Value : 0;
+            ulong winner = hp2 > hp1 ? _player2ClientId : _player1ClientId;
             EndRound(winner);
         }
 
@@ -146,6 +173,7 @@ namespace FrentePartido.Match
         {
             if (!IsServer || !_roundActive) return;
 
+            // Kill ends the round. Killer wins.
             _roundActive = false;
             EndRound(killerClientId);
         }
@@ -183,12 +211,23 @@ namespace FrentePartido.Match
             ResetPlayerForRound(_player1Health);
             ResetPlayerForRound(_player2Health);
 
+            // Move them back to spawn points (without this they stay where they died).
+            var spawn = FindAnyObjectByType<Networking.PlayerSpawnManager>();
+            if (spawn != null) spawn.RespawnPlayers();
+
             if (_beacon != null) _beacon.ResetBeacon();
 
             var spawner = FindAnyObjectByType<Pickups.PickupSpawner>();
             if (spawner != null) spawner.ResetPickups();
 
             ResetPlayerVisualsClientRpc();
+            RebuildDecorClientRpc();
+        }
+
+        [ClientRpc]
+        private void RebuildDecorClientRpc()
+        {
+            Core.GameplayVisualNormalizer.RebuildDecor();
         }
 
         private static void ResetPlayerForRound(Player.PlayerHealth health)

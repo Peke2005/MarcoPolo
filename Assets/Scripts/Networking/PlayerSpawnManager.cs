@@ -241,6 +241,35 @@ namespace FrentePartido.Networking
         }
 
         /// <summary>
+        /// Respawn a single player (used when killed mid-deathmatch).
+        /// Resets HP, state and teleports to the player's slot spawn point.
+        /// </summary>
+        public void RespawnSinglePlayer(ulong clientId)
+        {
+            if (!IsServer) return;
+            if (!_spawnedPlayers.TryGetValue(clientId, out NetworkObject netObj)) return;
+            if (netObj == null || !netObj.IsSpawned) return;
+
+            int slotIndex = _joinOrder.IndexOf(clientId);
+            Vector2 spawnPos = slotIndex == 0
+                ? _mapDefinition.spawnPointA
+                : _mapDefinition.spawnPointB;
+
+            MoveNetworkPlayer(netObj, new Vector3(spawnPos.x, spawnPos.y, 0f));
+
+            var health = netObj.GetComponent<PlayerHealth>();
+            if (health != null) health.ResetHealth();
+
+            var state = netObj.GetComponent<PlayerStateController>();
+            if (state != null) state.ForceState(PlayerState.Idle);
+
+            var weapon = netObj.GetComponent<FrentePartido.Combat.WeaponController>();
+            if (weapon != null) weapon.ResetWeapon();
+
+            RespawnPlayerClientRpc(clientId, spawnPos);
+        }
+
+        /// <summary>
         /// Returns the NetworkObject for a given client, or null if not spawned.
         /// </summary>
         public NetworkObject GetPlayerObject(ulong clientId)
@@ -263,14 +292,23 @@ namespace FrentePartido.Networking
         [ClientRpc]
         private void RespawnPlayerClientRpc(ulong clientId, Vector2 position)
         {
-            // Each client snaps the relevant player object to the respawn position.
-            // This ensures client-side position is correct even if NetworkTransform
-            // hasn't replicated yet.
-            if (NetworkManager.Singleton.LocalClientId != clientId) return;
+            var nm = NetworkManager.Singleton;
+            if (nm == null || nm.SpawnManager == null) return;
 
-            if (NetworkManager.Singleton.SpawnManager.GetLocalPlayerObject() is NetworkObject localPlayer)
+            foreach (var kv in nm.SpawnManager.SpawnedObjects)
             {
-                localPlayer.transform.position = new Vector3(position.x, position.y, 0f);
+                NetworkObject obj = kv.Value;
+                if (obj == null || !obj.IsPlayerObject) continue;
+                if (obj.OwnerClientId != clientId) continue;
+
+                // Restore visuals on every client so the dead sprite/weapon come back.
+                var presentation = obj.GetComponent<PlayerPresentation>();
+                if (presentation != null) presentation.ResetVisuals();
+
+                // Owner also snaps position locally (NetworkTransform may lag a frame).
+                if (clientId == nm.LocalClientId)
+                    obj.transform.position = new Vector3(position.x, position.y, 0f);
+                break;
             }
         }
     }

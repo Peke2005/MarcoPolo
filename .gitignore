@@ -51,3 +51,6 @@ package-lock.json
 # Local auth backend runtime data
 Backend/data/
 Backend/*.log
+
+# Claude Code workspace
+.claude/

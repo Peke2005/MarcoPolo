@@ -14,10 +14,13 @@ namespace FrentePartido.Match
 
         public NetworkVariable<byte> Player1Score = new(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
         public NetworkVariable<byte> Player2Score = new(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+        public NetworkVariable<byte> Player1Kills = new(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+        public NetworkVariable<byte> Player2Kills = new(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
         public NetworkVariable<byte> CurrentRound = new(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
         public NetworkVariable<MatchState> State = new(MatchState.WaitingForPlayers, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
         public event Action<byte, byte> OnScoreChanged;
+        public event Action<byte, byte> OnKillsChanged;
         public event Action<ulong> OnMatchWon;
         public event Action OnMatchStarted;
         public event Action OnRematchRequested;
@@ -41,6 +44,8 @@ namespace FrentePartido.Match
         {
             Player1Score.OnValueChanged += (_, _) => OnScoreChanged?.Invoke(Player1Score.Value, Player2Score.Value);
             Player2Score.OnValueChanged += (_, _) => OnScoreChanged?.Invoke(Player1Score.Value, Player2Score.Value);
+            Player1Kills.OnValueChanged += (_, _) => OnKillsChanged?.Invoke(Player1Kills.Value, Player2Kills.Value);
+            Player2Kills.OnValueChanged += (_, _) => OnKillsChanged?.Invoke(Player1Kills.Value, Player2Kills.Value);
 
             if (IsServer && _roundManager != null)
             {
@@ -84,6 +89,8 @@ namespace FrentePartido.Match
 
             Player1Score.Value = 0;
             Player2Score.Value = 0;
+            Player1Kills.Value = 0;
+            Player2Kills.Value = 0;
             CurrentRound.Value = 0;
             State.Value = MatchState.InProgress;
 
@@ -147,6 +154,23 @@ namespace FrentePartido.Match
         {
             OnRematchRequested?.Invoke();
             StartMatch();
+        }
+
+        /// <summary>
+        /// Server-only. Increment the killer's kill count (reuses Player1Score / Player2Score
+        /// as the live deathmatch counter shown on the HUD).
+        /// </summary>
+        public void RegisterKillServer(ulong killerClientId)
+        {
+            if (!IsServer) return;
+
+            var netState = Networking.NetworkGameState.Instance;
+            if (netState == null) return;
+
+            if (killerClientId == netState.Player1ClientId.Value)
+                Player1Kills.Value = (byte)Mathf.Min(Player1Kills.Value + 1, 255);
+            else if (killerClientId == netState.Player2ClientId.Value)
+                Player2Kills.Value = (byte)Mathf.Min(Player2Kills.Value + 1, 255);
         }
     }
 }

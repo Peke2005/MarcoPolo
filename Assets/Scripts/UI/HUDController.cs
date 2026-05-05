@@ -94,7 +94,12 @@ namespace FrentePartido.UI
         private void SubscribeToMatch()
         {
             if (MatchManager.Instance != null)
+            {
                 MatchManager.Instance.OnScoreChanged += UpdateScore;
+                MatchManager.Instance.OnMatchWon += HandleMatchWon;
+            }
+            if (RoundManager.Instance != null)
+                RoundManager.Instance.OnRoundStateChanged += HandleRoundStateChanged;
 
             var beacon = FindAnyObjectByType<BeaconCaptureController>();
             if (beacon != null)
@@ -104,11 +109,52 @@ namespace FrentePartido.UI
         private void UnsubscribeFromMatch()
         {
             if (MatchManager.Instance != null)
+            {
                 MatchManager.Instance.OnScoreChanged -= UpdateScore;
+                MatchManager.Instance.OnMatchWon -= HandleMatchWon;
+            }
+            if (RoundManager.Instance != null)
+                RoundManager.Instance.OnRoundStateChanged -= HandleRoundStateChanged;
+        }
+
+        private void HandleRoundStateChanged(FrentePartido.Data.RoundState state)
+        {
+            if (state == FrentePartido.Data.RoundState.SuddenDeath)
+                ShowAnnouncement("MUERTE SUBITA", 3f);
+            else if (state == FrentePartido.Data.RoundState.Active)
+                ShowAnnouncement("PELEAD", 1.5f);
+        }
+
+        private void HandleMatchWon(ulong winnerClientId)
+        {
+            string winnerLabel = "EMPATE";
+            var gs = FrentePartido.Networking.NetworkGameState.Instance;
+            if (gs != null)
+            {
+                if (winnerClientId == gs.Player1ClientId.Value) winnerLabel = "AZUL";
+                else if (winnerClientId == gs.Player2ClientId.Value) winnerLabel = "ROJO";
+            }
+
+            int p1 = MatchManager.Instance != null ? MatchManager.Instance.Player1Score.Value : 0;
+            int p2 = MatchManager.Instance != null ? MatchManager.Instance.Player2Score.Value : 0;
+            ShowAnnouncement($"GANA {winnerLabel}  {p1} - {p2}", 6f);
+
+            StartCoroutine(ReturnToMenuAfter(7f));
+        }
+
+        private IEnumerator ReturnToMenuAfter(float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            FrentePartido.Core.SceneFlowController.ReturnToMainMenu();
         }
 
         private void Update()
         {
+            // Auto-bind local player components once they spawn. Initialize() is not
+            // called from anywhere else, so without this the HUD never reflects state.
+            if (_localHealth == null)
+                TryAutoBindLocalPlayer();
+
             // Update timer from RoundManager
             if (RoundManager.Instance != null && _roundTimer != null)
                 _roundTimer.UpdateTimer(RoundManager.Instance.RoundTimer.Value);
@@ -117,6 +163,38 @@ namespace FrentePartido.UI
             var beacon = FindAnyObjectByType<BeaconCaptureController>();
             if (beacon != null && _beaconCaptureBar != null)
                 _beaconCaptureBar.fillAmount = beacon.CaptureProgress.Value;
+        }
+
+        private void TryAutoBindLocalPlayer()
+        {
+            var nm = Unity.Netcode.NetworkManager.Singleton;
+            if (nm == null || nm.SpawnManager == null) return;
+
+            var localPlayer = nm.SpawnManager.GetLocalPlayerObject();
+            if (localPlayer == null) return;
+
+            var health = localPlayer.GetComponent<Player.PlayerHealth>();
+            var weapon = localPlayer.GetComponent<Combat.WeaponController>();
+            var ability = localPlayer.GetComponent<Abilities.AbilityController>();
+            if (health == null) return;
+
+            int maxHp = 100;
+            var balance = Resources.Load<BalanceTuningData>("BalanceTuning");
+            if (balance != null) maxHp = balance.playerMaxHealth;
+
+            Initialize(health, weapon, ability, maxHp);
+
+            // Initial values: NetworkVariable initial sync does not fire OnValueChanged,
+            // so push current state into the UI manually.
+            UpdateHealth(health.CurrentHealth.Value, maxHp);
+            UpdateArmor(health.CurrentArmor.Value);
+            if (weapon != null)
+            {
+                int magSize = 8;
+                UpdateAmmo(weapon.CurrentAmmo.Value, magSize);
+            }
+            if (MatchManager.Instance != null)
+                UpdateScore(MatchManager.Instance.Player1Score.Value, MatchManager.Instance.Player2Score.Value);
         }
 
         private void UpdateHealth(int current, int max)

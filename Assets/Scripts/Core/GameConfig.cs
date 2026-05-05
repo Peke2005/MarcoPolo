@@ -18,7 +18,11 @@ namespace FrentePartido.Core
     {
         private const string PREFS_KEY = "FP_PlayerPrefs";
         public const string AUTH_URL_PREFS_KEY = "FP_AuthBaseUrl";
-        public const string DEFAULT_AUTH_BASE_URL = "http://26.234.30.190:3001";
+        public const string DEFAULT_AUTH_BASE_URL = "http://26.17.117.206:3001";
+        public static readonly string[] FALLBACK_AUTH_BASE_URLS =
+        {
+            "http://26.234.30.190:3001"
+        };
 
         public static PlayerPreferences Preferences { get; private set; } = new PlayerPreferences();
 
@@ -46,7 +50,7 @@ namespace FrentePartido.Core
             {
                 Preferences.authBaseUrl = savedOverride.Trim();
             }
-            else if (string.IsNullOrWhiteSpace(Preferences.authBaseUrl))
+            else
             {
                 Preferences.authBaseUrl = DEFAULT_AUTH_BASE_URL;
             }

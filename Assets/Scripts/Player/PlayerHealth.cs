@@ -78,12 +78,12 @@ namespace FrentePartido.Player
         }
 
         /// <summary>
-        /// Apply damage to this player. Can be called by any client (projectiles, grenades, etc.).
+        /// Server-only authoritative damage entry point.
         /// Armor absorbs damage first, remainder goes to health.
         /// </summary>
-        [ServerRpc(RequireOwnership = false)]
-        public void TakeDamageServerRpc(int damage, ulong sourceClientId, ServerRpcParams rpcParams = default)
+        public void ApplyDamageServer(int damage, ulong sourceClientId)
         {
+            if (!IsServer) return;
             if (IsDead) return;
             if (damage <= 0) return;
 
@@ -111,11 +111,21 @@ namespace FrentePartido.Player
         }
 
         /// <summary>
-        /// Heal this player. Can be called by any client (pickups, abilities, etc.).
+        /// Legacy owner-only RPC kept for local/self effects. Match damage uses ApplyDamageServer.
         /// </summary>
-        [ServerRpc(RequireOwnership = false)]
-        public void HealServerRpc(int amount, ServerRpcParams rpcParams = default)
+        [ServerRpc]
+        public void TakeDamageServerRpc(int damage, ulong sourceClientId, ServerRpcParams rpcParams = default)
         {
+            if (rpcParams.Receive.SenderClientId != OwnerClientId) return;
+            ApplyDamageServer(damage, sourceClientId);
+        }
+
+        /// <summary>
+        /// Server-only heal entry point.
+        /// </summary>
+        public void HealServer(int amount)
+        {
+            if (!IsServer) return;
             if (IsDead) return;
             if (amount <= 0) return;
 
@@ -123,15 +133,35 @@ namespace FrentePartido.Player
         }
 
         /// <summary>
-        /// Add armor to this player.
+        /// Legacy owner-only RPC kept for local/self effects. Pickups use HealServer.
         /// </summary>
-        [ServerRpc(RequireOwnership = false)]
-        public void AddArmorServerRpc(int amount, ServerRpcParams rpcParams = default)
+        [ServerRpc]
+        public void HealServerRpc(int amount, ServerRpcParams rpcParams = default)
         {
+            if (rpcParams.Receive.SenderClientId != OwnerClientId) return;
+            HealServer(amount);
+        }
+
+        /// <summary>
+        /// Server-only armor entry point.
+        /// </summary>
+        public void AddArmorServer(int amount)
+        {
+            if (!IsServer) return;
             if (IsDead) return;
             if (amount <= 0) return;
 
             CurrentArmor.Value += amount;
+        }
+
+        /// <summary>
+        /// Legacy owner-only RPC kept for local/self effects. Pickups use AddArmorServer.
+        /// </summary>
+        [ServerRpc]
+        public void AddArmorServerRpc(int amount, ServerRpcParams rpcParams = default)
+        {
+            if (rpcParams.Receive.SenderClientId != OwnerClientId) return;
+            AddArmorServer(amount);
         }
 
         /// <summary>

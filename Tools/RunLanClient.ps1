@@ -16,7 +16,7 @@ $logDir = Join-Path $repo 'Builds\Smoke'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $log = Join-Path $logDir 'radmin-client.log'
 
-$args = @('-logFile', $log, '-fpLanClient', '-fpAddress', $Address, '-fpPort', $Port)
+$args = @('-logFile', $log, '-fpLanClient', '-fpAddress', $Address, '-fpPort', $Port, '-fpQuitAfter', '0')
 if ($Windowed) {
     $args = @('-screen-width','1280','-screen-height','720','-popupwindow') + $args
 }

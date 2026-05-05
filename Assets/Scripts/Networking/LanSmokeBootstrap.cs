@@ -59,7 +59,7 @@ namespace FrentePartido.Networking
                 _isHost = HasArg(args, HostArg);
                 string address = GetArg(args, "-fpAddress", "127.0.0.1");
                 ushort port = (ushort)Mathf.Clamp(GetIntArg(args, "-fpPort", 7777), 1, 65535);
-                float quitAfter = Mathf.Max(0f, GetFloatArg(args, "-fpQuitAfter", 10f));
+                float quitAfter = Mathf.Max(0f, GetFloatArg(args, "-fpQuitAfter", 0f));
 
                 var nm = EnsureNetworkManager();
                 var transport = nm.GetComponent<UnityTransport>() ?? nm.gameObject.AddComponent<UnityTransport>();
@@ -67,7 +67,7 @@ namespace FrentePartido.Networking
                 nm.NetworkConfig.NetworkTransport = transport;
                 transport.SetConnectionData(address, port, "0.0.0.0");
 
-                RegisterPlayerPrefab(nm);
+                NetworkPrefabRegistry.RegisterDefaults(nm);
 
                 bool ok = _isHost ? nm.StartHost() : nm.StartClient();
                 Debug.Log($"[LanSmoke] Start {(_isHost ? "host" : "client")} addr={address} port={port} ok={ok}");
@@ -81,6 +81,11 @@ namespace FrentePartido.Networking
                 if (_isHost && HasArg(args, "-fpCombatSmoke"))
                 {
                     StartCoroutine(RunCombatSmoke());
+                }
+
+                if (!_isHost && HasArg(args, "-fpMoveSmoke"))
+                {
+                    StartCoroutine(RunClientMoveSmoke());
                 }
 
                 if (quitAfter > 0f)
@@ -149,7 +154,7 @@ namespace FrentePartido.Networking
 
                 for (int i = 0; i < 5; i++)
                 {
-                    target.TakeDamageServerRpc(20, attackerId);
+                    target.ApplyDamageServer(20, attackerId);
                     yield return new WaitForSeconds(0.15f);
                 }
 
@@ -160,6 +165,53 @@ namespace FrentePartido.Networking
                 if (!damageOk || !deathOk)
                 {
                     Application.Quit(4);
+                }
+            }
+
+            private IEnumerator RunClientMoveSmoke()
+            {
+                var nm = NetworkManager.Singleton;
+                float deadline = Time.realtimeSinceStartup + 10f;
+                NetworkObject localPlayer = null;
+
+                while (Time.realtimeSinceStartup < deadline)
+                {
+                    localPlayer = nm != null && nm.SpawnManager != null
+                        ? nm.SpawnManager.GetLocalPlayerObject()
+                        : null;
+                    if (localPlayer != null) break;
+                    yield return new WaitForSeconds(0.25f);
+                }
+
+                if (localPlayer == null)
+                {
+                    Debug.LogError("[LanSmoke] Move check failed: local player missing");
+                    Application.Quit(5);
+                    yield break;
+                }
+
+                var motor = localPlayer.GetComponent<PlayerMotor2D>();
+                if (motor == null)
+                {
+                    Debug.LogError("[LanSmoke] Move check failed: PlayerMotor2D missing");
+                    Application.Quit(6);
+                    yield break;
+                }
+
+                Vector3 start = localPlayer.transform.position;
+                motor.SetExternalMoveInput(Vector2.right);
+                yield return new WaitForSeconds(2f);
+                motor.SetExternalMoveInput(Vector2.zero);
+                yield return new WaitForSeconds(0.5f);
+
+                Vector3 end = localPlayer.transform.position;
+                float moved = Vector2.Distance(start, end);
+                Debug.Log($"[LanSmoke] Move check start={start} end={end} moved={moved:0.00}");
+
+                if (moved < 0.5f)
+                {
+                    Debug.LogError("[LanSmoke] Move check failed: client player did not move");
+                    Application.Quit(7);
                 }
             }
 
@@ -193,25 +245,6 @@ namespace FrentePartido.Networking
                 return nm;
             }
 
-            private static void RegisterPlayerPrefab(NetworkManager nm)
-            {
-                var spawn = FindFirstObjectByType<PlayerSpawnManager>();
-                if (spawn == null || spawn.PlayerPrefab == null)
-                {
-                    Debug.LogWarning("[LanSmoke] PlayerSpawnManager/PlayerPrefab missing.");
-                    return;
-                }
-
-                try
-                {
-                    nm.AddNetworkPrefab(spawn.PlayerPrefab);
-                    Debug.Log("[LanSmoke] Registered player prefab.");
-                }
-                catch (System.Exception e)
-                {
-                    Debug.LogWarning($"[LanSmoke] AddNetworkPrefab: {e.Message}");
-                }
-            }
         }
 
         private static bool HasArg(string[] args, string key)

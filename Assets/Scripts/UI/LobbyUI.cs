@@ -106,7 +106,10 @@ namespace FrentePartido.UI
             {
                 NetworkSessionManager.Instance.OnPlayerConnected += OnPlayerJoined;
                 NetworkSessionManager.Instance.OnPlayerDisconnected += OnPlayerLeft;
+                NetworkSessionManager.Instance.OnLobbyPlayersChanged += OnLobbyPlayersChanged;
             }
+
+            PublishLobbyState();
         }
 
         private void Update()
@@ -120,7 +123,7 @@ namespace FrentePartido.UI
             _lobbyRefreshTimer -= Time.unscaledDeltaTime;
             if (_lobbyRefreshTimer <= 0f)
             {
-                _lobbyRefreshTimer = 1.5f;
+                _lobbyRefreshTimer = 0.5f;
                 RefreshLobbyView();
             }
         }
@@ -131,6 +134,7 @@ namespace FrentePartido.UI
             {
                 NetworkSessionManager.Instance.OnPlayerConnected -= OnPlayerJoined;
                 NetworkSessionManager.Instance.OnPlayerDisconnected -= OnPlayerLeft;
+                NetworkSessionManager.Instance.OnLobbyPlayersChanged -= OnLobbyPlayersChanged;
             }
         }
 
@@ -476,10 +480,10 @@ namespace FrentePartido.UI
                     if (_abilityHighlights[i] != null)
                         _abilityHighlights[i].color = i == _selectedAbility ? YELLOW : BTN;
 
-            LobbyManager.UpdatePlayerData("AbilityId", _selectedAbility.ToString());
+            PublishLobbyState();
         }
 
-        async void SelectFaction(int faction)
+        void SelectFaction(int faction)
         {
             _selectedFaction = faction;
             GameConfig.Preferences.colorIndex = faction;
@@ -487,10 +491,10 @@ namespace FrentePartido.UI
             if (_blueHighlight != null) _blueHighlight.enabled = faction == 0;
             if (_redHighlight != null)  _redHighlight.enabled  = faction == 1;
 
-            await LobbyManager.UpdatePlayerData("Faction", faction.ToString());
+            PublishLobbyState();
         }
 
-        async void ToggleReady()
+        void ToggleReady()
         {
             _isReady = !_isReady;
             if (_readyButtonText != null)
@@ -498,16 +502,8 @@ namespace FrentePartido.UI
             if (_readyButtonBg != null)
                 _readyButtonBg.color = _isReady ? GREEN : BTN;
 
-            await LobbyManager.UpdatePlayerData("IsReady", _isReady.ToString());
-            await LobbyManager.RefreshCurrentLobby();
+            PublishLobbyState();
             UpdatePlayerList();
-
-            var netState = FrentePartido.Networking.NetworkGameState.Instance;
-            if (netState != null && netState.IsSpawned)
-            {
-                netState.SetPlayerReadyServerRpc(_isReady);
-            }
-
             CheckStartCondition();
         }
 
@@ -527,15 +523,16 @@ namespace FrentePartido.UI
 
         void UpdatePlayerList()
         {
-            var players = LobbyManager.GetPlayerSnapshots();
-            bool hasP2 = players.Count >= 2 ||
-                         (Unity.Netcode.NetworkManager.Singleton != null &&
-                          Unity.Netcode.NetworkManager.Singleton.ConnectedClientsIds.Count >= 2);
+            var session = NetworkSessionManager.Instance;
+            var players = session != null
+                ? session.GetLobbyPlayers()
+                : System.Array.Empty<NetworkSessionManager.LobbyPlayerInfo>();
+            bool hasP2 = players.Count >= 2;
 
             string p1Name = players.Count > 0 ? players[0].PlayerName : (GameConfig.Preferences.playerName ?? "Jugador 1");
-            string p2Name = players.Count > 1 ? players[1].PlayerName : "Esperando rival...";
+            string p2Name = hasP2 ? players[1].PlayerName : "Esperando rival...";
             bool p1Ready = players.Count > 0 && players[0].IsReady;
-            bool p2Ready = players.Count > 1 && players[1].IsReady;
+            bool p2Ready = hasP2 && players[1].IsReady;
 
             if (_player1NameText != null)
                 _player1NameText.text = p1Name;
@@ -554,26 +551,31 @@ namespace FrentePartido.UI
 
         void OnPlayerJoined(ulong id) { UpdatePlayerList(); CheckStartCondition(); }
         void OnPlayerLeft(ulong id)   { UpdatePlayerList(); CheckStartCondition(); }
+        void OnLobbyPlayersChanged()  { UpdatePlayerList(); CheckStartCondition(); }
 
         void CheckStartCondition()
         {
             if (_startGameButton == null) return;
             bool hasNet = Unity.Netcode.NetworkManager.Singleton != null &&
                           Unity.Netcode.NetworkManager.Singleton.IsListening;
-            bool canStart = hasNet && LobbyManager.IsHost && LobbyManager.AreAllPlayersReady();
+            var session = NetworkSessionManager.Instance;
+            bool canStart = hasNet && session != null && session.IsHost && session.AreLobbyPlayersReady();
             _startGameButton.interactable = canStart;
         }
 
-        async void RefreshLobbyView()
+        void RefreshLobbyView()
         {
-            if (_refreshingLobby || !LobbyManager.IsInLobby) return;
-
-            _refreshingLobby = true;
-            await LobbyManager.RefreshCurrentLobby();
-            _refreshingLobby = false;
-
             UpdatePlayerList();
             CheckStartCondition();
+        }
+
+        void PublishLobbyState()
+        {
+            NetworkSessionManager.Instance?.SubmitLobbyPlayerState(
+                GameConfig.Preferences.playerName,
+                _selectedAbility,
+                _selectedFaction,
+                _isReady);
         }
 
         // ════════════════════════════════════════════════════

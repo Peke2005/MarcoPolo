@@ -53,76 +53,105 @@ namespace FrentePartido.Auth
             string savedToken = PlayerPrefs.GetString("auth_token", "");
             if (string.IsNullOrEmpty(savedToken)) return false;
 
-            try
+            foreach (string baseUrl in GetBaseUrls())
             {
-                using var request = UnityWebRequest.Get($"{GetBaseUrl()}/auth/verify");
-                request.timeout = 5;
-                request.SetRequestHeader("Authorization", $"Bearer {savedToken}");
-                request.SetRequestHeader("Content-Type", "application/json");
-
-                var op = request.SendWebRequest();
-                while (!op.isDone) await Task.Yield();
-
-                if (request.result != UnityWebRequest.Result.Success)
+                try
                 {
-                    PlayerPrefs.DeleteKey("auth_token");
-                    PlayerPrefs.Save();
-                    Debug.LogWarning($"[Auth] Auto-login skipped: {DescribeRequestError(request)}");
-                    return false;
-                }
+                    using var request = UnityWebRequest.Get($"{baseUrl}/auth/verify");
+                    request.timeout = 5;
+                    request.SetRequestHeader("Authorization", $"Bearer {savedToken}");
+                    request.SetRequestHeader("Content-Type", "application/json");
 
-                var response = JsonUtility.FromJson<AuthResponse>(request.downloadHandler.text);
-                Token = savedToken;
-                UserId = response.userId;
-                Username = response.username;
-                DisplayName = response.displayName;
-                return true;
+                    var op = request.SendWebRequest();
+                    while (!op.isDone) await Task.Yield();
+
+                    if (request.result != UnityWebRequest.Result.Success)
+                    {
+                        if (IsConnectionFailure(request)) continue;
+
+                        PlayerPrefs.DeleteKey("auth_token");
+                        PlayerPrefs.Save();
+                        Debug.LogWarning($"[Auth] Auto-login skipped: {DescribeRequestError(request, baseUrl)}");
+                        return false;
+                    }
+
+                    var response = JsonUtility.FromJson<AuthResponse>(request.downloadHandler.text);
+                    Token = savedToken;
+                    UserId = response.userId;
+                    Username = response.username;
+                    DisplayName = response.displayName;
+                    Debug.Log($"[Auth] Auto-login OK via {baseUrl}");
+                    return true;
+                }
+                catch
+                {
+                    // Try next configured auth endpoint.
+                }
             }
-            catch
-            {
-                PlayerPrefs.DeleteKey("auth_token");
-                PlayerPrefs.Save();
-                return false;
-            }
+
+            PlayerPrefs.DeleteKey("auth_token");
+            PlayerPrefs.Save();
+            return false;
         }
 
         private static async Task<AuthResult> SendAuthRequest(string endpoint, string jsonBody)
         {
-            try
+            string lastConnectionError = "";
+            foreach (string baseUrl in GetBaseUrls())
             {
-                using var request = new UnityWebRequest($"{GetBaseUrl()}{endpoint}", "POST");
-                request.timeout = 8;
-                byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(jsonBody);
-                request.uploadHandler = new UploadHandlerRaw(bodyRaw);
-                request.downloadHandler = new DownloadHandlerBuffer();
-                request.SetRequestHeader("Content-Type", "application/json");
-
-                var op = request.SendWebRequest();
-                while (!op.isDone) await Task.Yield();
-
-                if (request.result != UnityWebRequest.Result.Success)
+                try
                 {
-                    return new AuthResult { success = false, error = DescribeRequestError(request) };
+                    using var request = new UnityWebRequest($"{baseUrl}{endpoint}", "POST");
+                    request.timeout = 8;
+                    byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(jsonBody);
+                    request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+                    request.downloadHandler = new DownloadHandlerBuffer();
+                    request.SetRequestHeader("Content-Type", "application/json");
+
+                    var op = request.SendWebRequest();
+                    while (!op.isDone) await Task.Yield();
+
+                    if (request.result != UnityWebRequest.Result.Success)
+                    {
+                        string error = DescribeRequestError(request, baseUrl);
+                        if (IsConnectionFailure(request))
+                        {
+                            lastConnectionError = error;
+                            Debug.LogWarning($"[Auth] Endpoint unavailable, trying fallback: {error}");
+                            continue;
+                        }
+
+                        return new AuthResult { success = false, error = error };
+                    }
+
+                    var response = JsonUtility.FromJson<AuthResponse>(request.downloadHandler.text);
+                    Token = response.token;
+                    UserId = response.userId;
+                    Username = response.username;
+                    DisplayName = response.displayName;
+
+                    PlayerPrefs.SetString("auth_token", Token);
+                    PlayerPrefs.Save();
+
+                    Debug.Log($"[Auth] Request OK via {baseUrl}");
+                    return new AuthResult { success = true };
                 }
-
-                var response = JsonUtility.FromJson<AuthResponse>(request.downloadHandler.text);
-                Token = response.token;
-                UserId = response.userId;
-                Username = response.username;
-                DisplayName = response.displayName;
-
-                PlayerPrefs.SetString("auth_token", Token);
-                PlayerPrefs.Save();
-
-                return new AuthResult { success = true };
+                catch (Exception e)
+                {
+                    lastConnectionError = $"Sin conexion al servidor ({baseUrl}): {e.Message}";
+                }
             }
-            catch (Exception e)
+
+            return new AuthResult
             {
-                return new AuthResult { success = false, error = $"Sin conexion al servidor: {e.Message}" };
-            }
+                success = false,
+                error = string.IsNullOrWhiteSpace(lastConnectionError)
+                    ? "Sin conexion al servidor de auth"
+                    : lastConnectionError
+            };
         }
 
-        private static string GetBaseUrl()
+        private static string[] GetBaseUrls()
         {
             string configuredUrl = GameConfig.Preferences?.authBaseUrl;
             if (string.IsNullOrWhiteSpace(configuredUrl))
@@ -130,10 +159,29 @@ namespace FrentePartido.Auth
                 configuredUrl = GameConfig.DEFAULT_AUTH_BASE_URL;
             }
 
-            return configuredUrl.Trim().TrimEnd('/');
+            var urls = new System.Collections.Generic.List<string>
+            {
+                configuredUrl.Trim().TrimEnd('/')
+            };
+
+            foreach (string fallback in GameConfig.FALLBACK_AUTH_BASE_URLS)
+            {
+                string trimmed = fallback.Trim().TrimEnd('/');
+                if (!urls.Contains(trimmed))
+                {
+                    urls.Add(trimmed);
+                }
+            }
+
+            return urls.ToArray();
         }
 
-        private static string DescribeRequestError(UnityWebRequest request)
+        private static bool IsConnectionFailure(UnityWebRequest request)
+        {
+            return request.result == UnityWebRequest.Result.ConnectionError || request.responseCode == 0;
+        }
+
+        private static string DescribeRequestError(UnityWebRequest request, string baseUrl)
         {
             string body = request.downloadHandler?.text;
             if (!string.IsNullOrWhiteSpace(body))
@@ -154,10 +202,10 @@ namespace FrentePartido.Auth
 
             if (!string.IsNullOrWhiteSpace(request.error))
             {
-                return $"No se puede contactar con auth ({GetBaseUrl()}): {request.error}";
+                return $"No se puede contactar con auth ({baseUrl}): {request.error}";
             }
 
-            return $"Error auth HTTP {request.responseCode}";
+            return $"Error auth HTTP {request.responseCode} ({baseUrl})";
         }
 
         [Serializable]

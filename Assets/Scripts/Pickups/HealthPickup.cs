@@ -12,7 +12,8 @@ namespace FrentePartido.Pickups
             var health = player.GetComponentInParent<Player.PlayerHealth>();
             if (health != null)
             {
-                health.HealServerRpc(_balance.healthPickupAmount);
+                int amount = _balance != null ? _balance.healthPickupAmount : 25;
+                health.HealServer(amount);
             }
         }
     }

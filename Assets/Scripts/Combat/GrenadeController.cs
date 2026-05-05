@@ -154,7 +154,7 @@ namespace FrentePartido.Combat
                 int damage = DamageDealer.CalculateGrenadeDamage(baseDamage, distance, radius);
                 if (damage > 0)
                 {
-                    targetHealth.TakeDamageServerRpc(damage, GrenadeOwnerClientId.Value);
+                    targetHealth.ApplyDamageServer(damage, GrenadeOwnerClientId.Value);
                 }
             }
 

@@ -50,8 +50,8 @@ namespace FrentePartido.Core
             ConfigureCamera();
             BuildCrosshair();
             BuildMinimap();
-            // Disabled: generated particles can render as magenta squares on some builds.
-            BuildVignette();
+            // No vignette: dark borders reduce gameplay readability.
+            RemoveVignette();
             EnsurePlayerVisualWatcher();
             SkinHud();
             FixLayerMasks();
@@ -119,6 +119,12 @@ namespace FrentePartido.Core
             image.sprite = MakeSprite(GenerateVignetteTexture(256), 32f);
             image.color = new Color(0f, 0f, 0f, 0.85f);
             image.raycastTarget = false;
+        }
+
+        private static void RemoveVignette()
+        {
+            var vignette = GameObject.Find("~Vignette");
+            if (vignette != null) Object.Destroy(vignette);
         }
 
         private static Texture2D GenerateVignetteTexture(int size)

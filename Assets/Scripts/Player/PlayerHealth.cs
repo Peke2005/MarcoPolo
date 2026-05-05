@@ -39,7 +39,8 @@ namespace FrentePartido.Player
 
         public bool IsDead => CurrentHealth.Value <= 0;
 
-        private int MaxHealth => balanceData != null ? balanceData.playerMaxHealth : 100;
+        private int MaxHealth => MaxHealthValue;
+        public int MaxHealthValue => balanceData != null ? balanceData.playerMaxHealth : 100;
 
         private void Awake()
         {

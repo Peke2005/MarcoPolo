@@ -4,13 +4,12 @@ namespace FrentePartido.Pickups
 {
     public class AmmoPickup : PickupBase
     {
-        protected override void ApplyEffect(GameObject player, ulong clientId)
+        protected override bool ApplyEffect(GameObject player, ulong clientId)
         {
             var weapon = player.GetComponentInParent<Combat.WeaponController>();
-            if (weapon != null)
-            {
-                weapon.RefillAmmo();
-            }
+            if (weapon == null) return false;
+            weapon.RefillAmmo();
+            return true;
         }
     }
 }

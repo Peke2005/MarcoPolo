@@ -75,15 +75,19 @@ namespace FrentePartido.UI
             var shell = Panel("Shell", bg.transform, new Color(0f, 0f, 0f, 0f));
             Anchors(shell, 0.11f, 0.08f, 0.89f, 0.92f);
 
-            var title = Text("Title", shell.transform, "MARCO POLO", 54, FontStyles.Bold, TXT);
-            Anchors(title, 0f, 0.78f, 1f, 1f);
+            var title = Text("Title", shell.transform, "MARCO POLO", 64, FontStyles.Bold, TXT);
+            Anchors(title, 0f, 0.82f, 1f, 1f);
             title.alignment = TextAlignmentOptions.Left;
-            title.characterSpacing = 6f;
+            title.characterSpacing = 8f;
 
-            var subtitle = Text("Subtitle", shell.transform, "duelo tactico online", 17, FontStyles.Bold, GOLD);
-            Anchors(subtitle, 0.01f, 0.72f, 1f, 0.80f);
+            // Accent bar under the title — adds visual weight without extra text.
+            var accent = Panel("TitleAccent", shell.transform, GOLD);
+            Anchors(accent, 0f, 0.80f, 0.10f, 0.815f);
+
+            var subtitle = Text("Subtitle", shell.transform, "DUELO TACTICO ONLINE", 22, FontStyles.Bold, GOLD);
+            Anchors(subtitle, 0.115f, 0.795f, 1f, 0.84f);
             subtitle.alignment = TextAlignmentOptions.Left;
-            subtitle.characterSpacing = 3f;
+            subtitle.characterSpacing = 8f;
 
             var card = Panel("MenuCard", shell.transform, PANEL);
             Anchors(card, 0f, 0.03f, 0.58f, 0.68f);
@@ -101,15 +105,39 @@ namespace FrentePartido.UI
             _optionsButton = MenuButton(card.transform, "Options", "AJUSTES", PANEL2, 0.08f, 0.24f, 0.92f, 0.37f);
             _quitButton = MenuButton(card.transform, "Quit", "SALIR", RED, 0.08f, 0.08f, 0.92f, 0.21f);
 
-            _statusText = Text("Status", shell.transform, "", 14, FontStyles.Bold, GOLD);
-            Anchors(_statusText, 0f, 0f, 0.58f, 0.05f);
-            _statusText.alignment = TextAlignmentOptions.Left;
-
             BuildJoinPanel(shell.transform);
             BuildOptionsPanel(shell.transform);
 
-            _loadingIndicator = Text("Loading", card.transform, "CARGANDO...", 16, FontStyles.Bold, GOLD).gameObject;
-            Anchors(_loadingIndicator.GetComponent<RectTransform>(), 0.08f, 0.08f, 0.92f, 0.21f);
+            BuildLoadingOverlay(card.transform);
+        }
+
+        private void BuildLoadingOverlay(Transform cardTransform)
+        {
+            // Full-card modal that shows during async ops. Sits over the buttons so the
+            // loading message is centered and never overlaps SALIR or floats off-card.
+            var overlay = Panel("LoadingOverlay", cardTransform, new Color(0.06f, 0.085f, 0.075f, 0.94f));
+            Stretch(overlay);
+
+            var pulse = Panel("LoadingPulse", overlay.transform, new Color(GOLD.r, GOLD.g, GOLD.b, 0.10f));
+            Anchors(pulse, 0.18f, 0.42f, 0.82f, 0.62f);
+
+            var label = Text("LoadingLabel", overlay.transform, "CARGANDO", 26, FontStyles.Bold, GOLD);
+            Anchors(label, 0.05f, 0.50f, 0.95f, 0.66f);
+            label.alignment = TextAlignmentOptions.Center;
+            label.characterSpacing = 10f;
+
+            _statusText = Text("LoadingStatus", overlay.transform, "", 14, FontStyles.Normal, TXT);
+            Anchors(_statusText, 0.05f, 0.36f, 0.95f, 0.48f);
+            _statusText.alignment = TextAlignmentOptions.Center;
+            _statusText.characterSpacing = 2f;
+
+            var dots = Text("LoadingDots", overlay.transform, "•   •   •", 22, FontStyles.Bold, GOLD);
+            Anchors(dots, 0.05f, 0.24f, 0.95f, 0.36f);
+            dots.alignment = TextAlignmentOptions.Center;
+            dots.characterSpacing = 8f;
+            dots.gameObject.AddComponent<LoadingDotsAnimator>();
+
+            _loadingIndicator = overlay.gameObject;
         }
 
         private void BuildJoinPanel(Transform parent)
@@ -248,23 +276,31 @@ namespace FrentePartido.UI
         private void SetLoading(bool loading, string message = "")
         {
             if (_loadingIndicator != null) _loadingIndicator.SetActive(loading);
-            _createGameButton?.gameObject.SetActive(!loading);
-            _joinGameButton?.gameObject.SetActive(!loading);
             if (_statusText != null)
             {
                 _statusText.text = message;
-                _statusText.color = loading ? GOLD : TXT;
+                _statusText.color = loading ? TXT : new Color(1f, 0.34f, 0.28f, 1f);
             }
         }
 
         private void ShowError(string msg)
         {
+            // Briefly flash the loading overlay with an error styling so users see why
+            // the action failed instead of the message landing off-card in gold text.
+            if (_loadingIndicator != null) _loadingIndicator.SetActive(true);
             if (_statusText != null)
             {
                 _statusText.text = msg;
                 _statusText.color = new Color(1f, 0.34f, 0.28f, 1f);
             }
+            CancelInvoke(nameof(HideLoading));
+            Invoke(nameof(HideLoading), 3f);
             Debug.LogError($"[MainMenu] {msg}");
+        }
+
+        private void HideLoading()
+        {
+            if (_loadingIndicator != null) _loadingIndicator.SetActive(false);
         }
 
         private static Button MenuButton(Transform parent, string name, string label, Color color, float x1, float y1, float x2, float y2)
@@ -370,6 +406,29 @@ namespace FrentePartido.UI
         private static void Anchors(Component component, float xMin, float yMin, float xMax, float yMax)
         {
             Anchors(component.GetComponent<RectTransform>(), xMin, yMin, xMax, yMax);
+        }
+    }
+
+    /// <summary>Cycles "•   •   •" dot brightness for a simple pulsing indicator.</summary>
+    public class LoadingDotsAnimator : MonoBehaviour
+    {
+        private TMP_Text _text;
+        private float _t;
+
+        private void Awake() { _text = GetComponent<TMP_Text>(); }
+
+        private void Update()
+        {
+            if (_text == null) return;
+            _t += Time.deltaTime * 2.4f;
+            int phase = ((int)_t) % 4;
+            _text.text = phase switch
+            {
+                0 => "<alpha=#FF>•   <alpha=#55>•   <alpha=#55>•",
+                1 => "<alpha=#55>•   <alpha=#FF>•   <alpha=#55>•",
+                2 => "<alpha=#55>•   <alpha=#55>•   <alpha=#FF>•",
+                _ => "<alpha=#22>•   <alpha=#22>•   <alpha=#22>•",
+            };
         }
     }
 }

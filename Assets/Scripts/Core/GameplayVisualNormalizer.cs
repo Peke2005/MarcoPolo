@@ -675,6 +675,23 @@ namespace FrentePartido.Core
             AnchorBottomRightImage(hud, "GrenadeIcon", new Vector2(-180f, 42f), new Vector2(34f, 34f));
             AnchorBottomRightImage(hud, "AbilityCooldown", new Vector2(-232f, 42f), new Vector2(42f, 42f));
 
+            // Anchor the dark _BG frames behind the bars so the original middle-screen
+            // ghosts are gone. Sized slightly bigger than the bar for a clean border.
+            AnchorBottomLeftImage(hud, "HealthBar_BG", new Vector2(28f, 46f), new Vector2(224f, 22f));
+            AnchorBottomLeftImage(hud, "ArmorBar_BG",  new Vector2(28f, 16f), new Vector2(224f, 14f));
+            AnchorBottomRightImage(hud, "ReloadBar_BG", new Vector2(-28f, 22f), new Vector2(124f, 14f));
+
+            // Force initial bar fills so we never see a flash of a full armor bar
+            // before the local player's NetworkVariable values get pushed in.
+            var hpBar = FindDeepChild(hud.transform, "HealthBar")?.GetComponent<Image>();
+            if (hpBar != null) hpBar.fillAmount = 1f;
+            var armorBar = FindDeepChild(hud.transform, "ArmorBar")?.GetComponent<Image>();
+            if (armorBar != null) armorBar.fillAmount = 0f;
+            var reloadBar = FindDeepChild(hud.transform, "ReloadBar")?.GetComponent<Image>();
+            if (reloadBar != null) reloadBar.fillAmount = 0f;
+            var armorTxt = FindDeepChild(hud.transform, "ArmorText")?.GetComponent<TMPro.TMP_Text>();
+            if (armorTxt != null) armorTxt.text = "";
+
             foreach (var image in hud.GetComponentsInChildren<Image>(true))
             {
                 string n = image.gameObject.name;

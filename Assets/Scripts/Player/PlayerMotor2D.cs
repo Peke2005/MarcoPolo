@@ -22,7 +22,10 @@ namespace FrentePartido.Player
         private Vector2 _rawKeyboardDir;
         private Vector2 _serverMoveDir;
         private Vector2 _externalMoveDir;
+        private Vector2 _lastSentMoveDir;
+        private float _moveRpcTimer;
         private readonly RaycastHit2D[] _moveHits = new RaycastHit2D[12];
+        private const float MoveRpcInterval = 1f / 30f;
 
         public bool IsMovementEnabled => _movementEnabled;
 
@@ -41,12 +44,14 @@ namespace FrentePartido.Player
             {
                 // Non-owners: kinematic, NetworkTransform handles sync
                 _rb.bodyType = RigidbodyType2D.Kinematic;
+                _rb.interpolation = RigidbodyInterpolation2D.Interpolate;
                 if (_input != null)
                     _input.IsInputEnabled = false;
             }
             else
             {
                 _rb.bodyType = IsServer ? RigidbodyType2D.Dynamic : RigidbodyType2D.Kinematic;
+                _rb.interpolation = RigidbodyInterpolation2D.None;
                 _rb.gravityScale = 0f; // Top-down, no gravity
                 _rb.freezeRotation = true;
                 _movementEnabled = true;
@@ -72,13 +77,25 @@ namespace FrentePartido.Player
                 _rawKeyboardDir = dir;
             }
 
-            if (!IsServer)
+            float speed = balanceData != null ? balanceData.moveSpeed : 5f;
+            Vector2 moveDir = GetLocalMoveInput();
+
+            if (IsServer)
             {
-                float speed = balanceData != null ? balanceData.moveSpeed : 5f;
-                Vector2 moveDir = GetLocalMoveInput();
-                SubmitMoveInputServerRpc(moveDir);
-                MoveServerAuthoritative(moveDir, speed, Time.deltaTime);
+                // Host owns server authority, so move immediately in Update.
+                // This avoids FixedUpdate + MovePosition render delay on the host PC.
+                MoveServerAuthoritative(moveDir, speed, Time.deltaTime, immediate: true);
+                return;
             }
+
+            if (ShouldSendMove(moveDir))
+            {
+                SubmitMoveInputServerRpc(moveDir);
+                _lastSentMoveDir = moveDir;
+                _moveRpcTimer = MoveRpcInterval;
+            }
+
+            MoveServerAuthoritative(moveDir, speed, Time.deltaTime, immediate: true);
         }
 
         private void FixedUpdate()
@@ -88,7 +105,7 @@ namespace FrentePartido.Player
             float speed = balanceData != null ? balanceData.moveSpeed : 5f;
             Vector2 moveDir = GetLocalMoveInput();
 
-            if (IsOwner && !IsServer)
+            if (IsOwner)
             {
                 return;
             }
@@ -97,6 +114,15 @@ namespace FrentePartido.Player
             if (!IsOwner) moveDir = _serverMoveDir;
 
             MoveServerAuthoritative(moveDir, speed, Time.fixedDeltaTime);
+        }
+
+        private bool ShouldSendMove(Vector2 moveDir)
+        {
+            _moveRpcTimer -= Time.deltaTime;
+            if ((moveDir - _lastSentMoveDir).sqrMagnitude > 0.0025f)
+                return true;
+
+            return _moveRpcTimer <= 0f;
         }
 
         private Vector2 GetLocalMoveInput()
@@ -112,7 +138,7 @@ namespace FrentePartido.Player
             return moveDir;
         }
 
-        private void MoveServerAuthoritative(Vector2 moveDir, float speed, float deltaTime)
+        private void MoveServerAuthoritative(Vector2 moveDir, float speed, float deltaTime, bool immediate = false)
         {
             if (!_movementEnabled) return;
 
@@ -138,10 +164,20 @@ namespace FrentePartido.Player
             // Try physics-aware MovePosition first; if the rigidbody is kinematic
             // or somehow frozen, fall back to a raw transform move so the owner
             // always gets visual feedback.
-            if (_rb != null && _rb.bodyType != RigidbodyType2D.Kinematic)
-                _rb.MovePosition(targetPos);
-            else
+            if (_rb != null && immediate)
+            {
+                _rb.position = targetPos;
+                _rb.velocity = Vector2.zero;
                 transform.position = new Vector3(targetPos.x, targetPos.y, transform.position.z);
+            }
+            else if (_rb != null && _rb.bodyType != RigidbodyType2D.Kinematic)
+            {
+                _rb.MovePosition(targetPos);
+            }
+            else
+            {
+                transform.position = new Vector3(targetPos.x, targetPos.y, transform.position.z);
+            }
         }
 
         private Vector2 ResolveBlockingDelta(Vector2 delta)

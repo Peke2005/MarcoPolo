@@ -59,7 +59,7 @@ namespace FrentePartido.Networking
                 _isHost = HasArg(args, HostArg);
                 string address = GetArg(args, "-fpAddress", "127.0.0.1");
                 ushort port = (ushort)Mathf.Clamp(GetIntArg(args, "-fpPort", 7777), 1, 65535);
-                float quitAfter = Mathf.Max(0f, GetFloatArg(args, "-fpQuitAfter", 10f));
+                float quitAfter = Mathf.Max(0f, GetFloatArg(args, "-fpQuitAfter", 0f));
 
                 var nm = EnsureNetworkManager();
                 var transport = nm.GetComponent<UnityTransport>() ?? nm.gameObject.AddComponent<UnityTransport>();

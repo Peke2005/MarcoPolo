@@ -84,6 +84,11 @@ namespace FrentePartido.Networking
                     StartCoroutine(RunCombatSmoke());
                 }
 
+                if (_isHost && HasArg(args, "-fpPickupSmoke"))
+                {
+                    StartCoroutine(RunPickupSmoke());
+                }
+
                 if (_isHost && HasArg(args, ObserveClientMoveArg))
                 {
                     StartCoroutine(RunObserveClientMoveSmoke());
@@ -172,6 +177,82 @@ namespace FrentePartido.Networking
                 {
                     Application.Quit(4);
                 }
+            }
+
+            private IEnumerator RunPickupSmoke()
+            {
+                float deadline = Time.realtimeSinceStartup + 12f;
+
+                while (Time.realtimeSinceStartup < deadline)
+                {
+                    if (GetSpawnedPlayerHealths().Count >= 2)
+                        break;
+
+                    yield return new WaitForSeconds(0.25f);
+                }
+
+                List<PlayerHealth> players = GetSpawnedPlayerHealths();
+                if (players.Count < 2)
+                {
+                    Debug.LogError($"[LanSmoke] Pickup check failed: players={players.Count}");
+                    Application.Quit(10);
+                    yield break;
+                }
+
+                bool allOk = true;
+                foreach (PlayerHealth player in players)
+                {
+                    bool scenarioOk = false;
+                    yield return StartCoroutine(RunPickupScenario(player, value => scenarioOk = value));
+                    allOk &= scenarioOk;
+                }
+
+                Debug.Log($"[LanSmoke] Pickup check allOk={allOk}");
+                if (!allOk)
+                    Application.Quit(11);
+            }
+
+            private IEnumerator RunPickupScenario(PlayerHealth player, System.Action<bool> onComplete)
+            {
+                bool ok = false;
+                if (player == null || player.NetworkObject == null)
+                {
+                    onComplete?.Invoke(false);
+                    yield break;
+                }
+
+                ulong clientId = player.NetworkObject.OwnerClientId;
+                player.CurrentHealth.Value = 25;
+                player.CurrentArmor.Value = 0;
+                yield return new WaitForSeconds(0.1f);
+
+                ApplySmokeHealthPickup(player, 25);
+                yield return new WaitForSeconds(0.25f);
+                int afterHeal = player.CurrentHealth.Value;
+                int armorAfterHeal = player.CurrentArmor.Value;
+
+                player.CurrentHealth.Value = player.MaxHealthValue;
+                player.CurrentArmor.Value = 0;
+                yield return new WaitForSeconds(0.1f);
+
+                ApplySmokeHealthPickup(player, 25);
+                yield return new WaitForSeconds(0.25f);
+                int afterFull = player.CurrentHealth.Value;
+                int armorAfterFull = player.CurrentArmor.Value;
+
+                ok = afterHeal == 50 && armorAfterHeal == 0 && afterFull == player.MaxHealthValue && armorAfterFull > 0;
+                Debug.Log($"[LanSmoke] Pickup check client={clientId} healHp=25->{afterHeal} healArmor={armorAfterHeal} fullHp={afterFull} fullArmor={armorAfterFull} ok={ok}");
+
+                onComplete?.Invoke(ok);
+            }
+
+            private static void ApplySmokeHealthPickup(PlayerHealth health, int amount)
+            {
+                int missingHealth = Mathf.Max(0, health.MaxHealthValue - health.CurrentHealth.Value);
+                int healAmount = Mathf.Min(amount, missingHealth);
+                int shieldAmount = amount - healAmount;
+                if (healAmount > 0) health.HealServer(healAmount);
+                if (shieldAmount > 0) health.AddArmorServer(shieldAmount);
             }
 
             private IEnumerator RunClientMoveSmoke()

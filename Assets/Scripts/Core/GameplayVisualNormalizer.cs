@@ -666,6 +666,10 @@ namespace FrentePartido.Core
             // Anchor timer + score to top-left so they stay there at any window size.
             AnchorTopLeft(hud, "RoundTimerText", new Vector2(20f, -20f), TMPro.TextAlignmentOptions.TopLeft);
             AnchorTopLeft(hud, "RoundScoreText", new Vector2(20f, -70f), TMPro.TextAlignmentOptions.TopLeft);
+            AnchorBottomLeft(hud, "HealthText", new Vector2(30f, 66f), new Vector2(90f, 28f), TMPro.TextAlignmentOptions.BottomLeft);
+            AnchorBottomLeftImage(hud, "HealthBar", new Vector2(30f, 48f), new Vector2(220f, 18f));
+            AnchorBottomLeft(hud, "ArmorText", new Vector2(30f, 22f), new Vector2(90f, 24f), TMPro.TextAlignmentOptions.BottomLeft);
+            AnchorBottomLeftImage(hud, "ArmorBar", new Vector2(30f, 18f), new Vector2(220f, 10f));
             AnchorBottomRight(hud, "AmmoText", new Vector2(-30f, 46f), new Vector2(110f, 34f), TMPro.TextAlignmentOptions.BottomRight);
             AnchorBottomRightImage(hud, "ReloadBar", new Vector2(-30f, 24f), new Vector2(120f, 10f));
             AnchorBottomRightImage(hud, "GrenadeIcon", new Vector2(-180f, 42f), new Vector2(34f, 34f));
@@ -736,6 +740,29 @@ namespace FrentePartido.Core
             }
         }
 
+        private static void AnchorBottomLeft(GameObject hud, string childName, Vector2 anchoredPos, Vector2 size, TMPro.TextAlignmentOptions align)
+        {
+            Transform t = FindDeepChild(hud.transform, childName);
+            if (t == null) return;
+            var rt = t as RectTransform;
+            if (rt == null) return;
+
+            if (t.parent != hud.transform) t.SetParent(hud.transform, false);
+            rt.anchorMin = new Vector2(0f, 0f);
+            rt.anchorMax = new Vector2(0f, 0f);
+            rt.pivot = new Vector2(0f, 0f);
+            rt.anchoredPosition = anchoredPos;
+            rt.sizeDelta = size;
+
+            var tmp = t.GetComponent<TMPro.TMP_Text>();
+            if (tmp != null)
+            {
+                tmp.alignment = align;
+                tmp.fontSize = Mathf.Max(tmp.fontSize, 20f);
+                tmp.color = new Color(0.94f, 1f, 0.96f, 0.98f);
+            }
+        }
+
         private static void AnchorBottomRightImage(GameObject hud, string childName, Vector2 anchoredPos, Vector2 size)
         {
             Transform t = FindDeepChild(hud.transform, childName);
@@ -747,6 +774,21 @@ namespace FrentePartido.Core
             rt.anchorMin = new Vector2(1f, 0f);
             rt.anchorMax = new Vector2(1f, 0f);
             rt.pivot = new Vector2(1f, 0f);
+            rt.anchoredPosition = anchoredPos;
+            rt.sizeDelta = size;
+        }
+
+        private static void AnchorBottomLeftImage(GameObject hud, string childName, Vector2 anchoredPos, Vector2 size)
+        {
+            Transform t = FindDeepChild(hud.transform, childName);
+            if (t == null) return;
+            var rt = t as RectTransform;
+            if (rt == null) return;
+
+            if (t.parent != hud.transform) t.SetParent(hud.transform, false);
+            rt.anchorMin = new Vector2(0f, 0f);
+            rt.anchorMax = new Vector2(0f, 0f);
+            rt.pivot = new Vector2(0f, 0f);
             rt.anchoredPosition = anchoredPos;
             rt.sizeDelta = size;
         }

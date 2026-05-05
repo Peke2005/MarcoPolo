@@ -80,6 +80,10 @@ namespace FrentePartido.Pickups
 
             IsAvailable.Value = false;
             PlayPickupEffectClientRpc();
+
+            var spawner = FindFirstObjectByType<PickupSpawner>();
+            if (spawner != null)
+                spawner.ScheduleRespawn(NetworkObject);
         }
 
         protected abstract bool ApplyEffect(GameObject player, ulong clientId);

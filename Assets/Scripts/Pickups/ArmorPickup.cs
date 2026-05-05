@@ -11,9 +11,11 @@ namespace FrentePartido.Pickups
         {
             var health = player.GetComponentInParent<Player.PlayerHealth>();
             if (health == null) return false;
+            int before = health.CurrentArmor.Value;
             int amount = _balance != null ? _balance.armorPickupAmount : 25;
             health.AddArmorServer(amount);
-            return true;
+            Debug.Log($"[Pickup] Armor client={clientId} {before}->{health.CurrentArmor.Value}");
+            return health.CurrentArmor.Value > before;
         }
     }
 }

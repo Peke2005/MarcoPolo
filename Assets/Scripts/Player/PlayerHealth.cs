@@ -41,6 +41,7 @@ namespace FrentePartido.Player
 
         private int MaxHealth => MaxHealthValue;
         public int MaxHealthValue => balanceData != null ? balanceData.playerMaxHealth : 100;
+        public int MaxArmorValue => 50;
 
         private void Awake()
         {
@@ -152,7 +153,7 @@ namespace FrentePartido.Player
             if (IsDead) return;
             if (amount <= 0) return;
 
-            CurrentArmor.Value += amount;
+            CurrentArmor.Value = Mathf.Min(CurrentArmor.Value + amount, MaxArmorValue);
         }
 
         /// <summary>

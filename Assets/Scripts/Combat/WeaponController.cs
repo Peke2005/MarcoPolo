@@ -43,6 +43,7 @@ namespace FrentePartido.Combat
         private bool _fireHeld;
         private Coroutine _reloadCoroutine;
         private readonly RaycastHit2D[] _shotHits = new RaycastHit2D[16];
+        private const float ShotRadius = 0.14f;
 
         private void Awake()
         {
@@ -240,7 +241,12 @@ namespace FrentePartido.Combat
         private void ResolveServerHitscan(Vector2 origin, Vector2 direction, ulong sourceId)
         {
             int mask = hitLayers | obstacleLayer;
-            int count = Physics2D.RaycastNonAlloc(origin, direction, _shotHits, weaponData.range, mask);
+            if (direction.sqrMagnitude < 0.001f) return;
+            direction.Normalize();
+
+            // Start slightly outside own body and use a small radius so shots are readable online.
+            Vector2 castOrigin = origin + direction * 0.25f;
+            int count = Physics2D.CircleCastNonAlloc(castOrigin, ShotRadius, direction, _shotHits, weaponData.range, mask);
             if (count <= 0) return;
 
             System.Array.Sort(_shotHits, 0, count, RaycastHitDistanceComparer.Instance);
@@ -259,6 +265,7 @@ namespace FrentePartido.Combat
                     if (targetHealth.IsDead) return;
                     int damage = DamageDealer.CalculateDamage(weaponData.damage, hit.distance, weaponData.range);
                     targetHealth.ApplyDamageServer(damage, sourceId);
+                    Debug.Log($"[Combat] Hit {targetHealth.OwnerClientId} for {damage}. HP={targetHealth.CurrentHealth.Value}");
                     return;
                 }
 

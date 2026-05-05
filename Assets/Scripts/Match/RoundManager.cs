@@ -48,6 +48,43 @@ namespace FrentePartido.Match
             _suddenDeath = GetComponent<SuddenDeathController>();
         }
 
+        private void Update()
+        {
+            // Auto-register players on the server once both have spawned. RegisterPlayers
+            // is not called from anywhere else, so without this round end / death
+            // detection never fires.
+            if (!IsServer) return;
+            if (_player1Health != null && _player2Health != null) return;
+
+            var gs = Networking.NetworkGameState.Instance;
+            if (gs == null) return;
+
+            ulong p1Id = gs.Player1ClientId.Value;
+            ulong p2Id = gs.Player2ClientId.Value;
+            if (p1Id == ulong.MaxValue || p2Id == ulong.MaxValue) return;
+
+            var nm = NetworkManager.Singleton;
+            if (nm == null || nm.SpawnManager == null) return;
+
+            Player.PlayerHealth h1 = null;
+            Player.PlayerHealth h2 = null;
+            foreach (var kv in nm.SpawnManager.SpawnedObjects)
+            {
+                var obj = kv.Value;
+                if (obj == null || !obj.IsPlayerObject) continue;
+                var hp = obj.GetComponent<Player.PlayerHealth>();
+                if (hp == null) continue;
+                if (obj.OwnerClientId == p1Id) h1 = hp;
+                else if (obj.OwnerClientId == p2Id) h2 = hp;
+            }
+
+            if (h1 != null && h2 != null)
+            {
+                RegisterPlayers(h1, p1Id, h2, p2Id);
+                Debug.Log("[Round] Auto-registered both players.");
+            }
+        }
+
         public void RegisterPlayers(Player.PlayerHealth p1, ulong p1Id, Player.PlayerHealth p2, ulong p2Id)
         {
             _player1Health = p1;

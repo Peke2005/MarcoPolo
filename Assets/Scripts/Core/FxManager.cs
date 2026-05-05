@@ -11,6 +11,7 @@ namespace FrentePartido.Core
         private static Sprite _flashSprite;
         private static Sprite _sparkSprite;
         private static Sprite _ringSprite;
+        private static Sprite _tracerSprite;
         private static AudioClip _gunshotClip;
         private static AudioClip _hitClip;
         private static AudioClip _pickupClip;
@@ -43,6 +44,26 @@ namespace FrentePartido.Core
             sr.sortingOrder = 30;
             go.transform.localScale = new Vector3(0.6f, 0.6f, 1f);
             go.AddComponent<FxFade>().Init(0.2f, sr.color);
+        }
+
+        public static void SpawnBulletTracer(Vector3 origin, Vector2 direction, float range)
+        {
+            EnsureSprites();
+            if (direction.sqrMagnitude < 0.001f) return;
+
+            direction.Normalize();
+            float length = Mathf.Clamp(range, 3f, 16f);
+            var go = new GameObject("FX_BulletTracer");
+            go.transform.position = origin + (Vector3)(direction * (length * 0.5f));
+            float ang = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+            go.transform.rotation = Quaternion.Euler(0f, 0f, ang);
+
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = _tracerSprite;
+            sr.color = new Color(1f, 0.92f, 0.22f, 0.95f);
+            sr.sortingOrder = 29;
+            go.transform.localScale = new Vector3(length, 0.11f, 1f);
+            go.AddComponent<FxFade>().Init(0.075f, sr.color);
         }
 
         public static void SpawnExplosionRing(Vector3 position, float radius)
@@ -89,6 +110,7 @@ namespace FrentePartido.Core
             if (_flashSprite == null) _flashSprite = BuildFlashSprite();
             if (_sparkSprite == null) _sparkSprite = BuildSparkSprite();
             if (_ringSprite  == null) _ringSprite  = BuildRingSprite();
+            if (_tracerSprite == null) _tracerSprite = BuildTracerSprite();
         }
 
         private static Sprite BuildFlashSprite()
@@ -149,6 +171,26 @@ namespace FrentePartido.Core
             }
             tex.SetPixels(px); tex.Apply();
             return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 32f, 0, SpriteMeshType.FullRect);
+        }
+
+        private static Sprite BuildTracerSprite()
+        {
+            int w = 64, h = 8;
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            var px = new Color[w * h];
+            for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                float tx = x / (float)(w - 1);
+                float cy = Mathf.Abs(y - (h - 1) * 0.5f) / ((h - 1) * 0.5f);
+                float core = Mathf.Clamp01(1f - cy);
+                float fade = Mathf.Sin(tx * Mathf.PI);
+                float a = Mathf.Pow(core, 0.65f) * Mathf.Pow(fade, 0.35f);
+                px[y * w + x] = new Color(1f, 1f, 1f, a);
+            }
+            tex.filterMode = FilterMode.Bilinear;
+            tex.SetPixels(px); tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 64f, 0, SpriteMeshType.FullRect);
         }
 
         // ── Audio synthesis ──────────────────────────────────────────

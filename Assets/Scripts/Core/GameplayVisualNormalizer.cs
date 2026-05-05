@@ -50,7 +50,7 @@ namespace FrentePartido.Core
             ConfigureCamera();
             BuildCrosshair();
             BuildMinimap();
-            BuildAmbientParticles();
+            // Disabled: generated particles can render as magenta squares on some builds.
             BuildVignette();
             EnsurePlayerVisualWatcher();
             SkinHud();

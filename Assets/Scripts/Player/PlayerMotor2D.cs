@@ -16,15 +16,20 @@ namespace FrentePartido.Player
         [SerializeField] private MapDefinition mapDefinition;
 
         private Rigidbody2D _rb;
+        private Collider2D _bodyCollider;
         private PlayerInputReader _input;
         private bool _movementEnabled = true;
         private Vector2 _rawKeyboardDir;
         private Vector2 _serverMoveDir;
         private Vector2 _externalMoveDir;
+        private readonly RaycastHit2D[] _moveHits = new RaycastHit2D[12];
+
+        public bool IsMovementEnabled => _movementEnabled;
 
         private void Awake()
         {
             _rb = GetComponent<Rigidbody2D>();
+            _bodyCollider = GetComponent<Collider2D>();
             _input = GetComponent<PlayerInputReader>();
         }
 
@@ -57,14 +62,23 @@ namespace FrentePartido.Player
             if (!IsSpawned || !IsOwner) return;
 
             var kb = Keyboard.current;
-            if (kb == null) return;
+            if (kb != null)
+            {
+                Vector2 dir = Vector2.zero;
+                if (kb.wKey.isPressed || kb.upArrowKey.isPressed)    dir.y += 1f;
+                if (kb.sKey.isPressed || kb.downArrowKey.isPressed)  dir.y -= 1f;
+                if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) dir.x += 1f;
+                if (kb.aKey.isPressed || kb.leftArrowKey.isPressed)  dir.x -= 1f;
+                _rawKeyboardDir = dir;
+            }
 
-            Vector2 dir = Vector2.zero;
-            if (kb.wKey.isPressed || kb.upArrowKey.isPressed)    dir.y += 1f;
-            if (kb.sKey.isPressed || kb.downArrowKey.isPressed)  dir.y -= 1f;
-            if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) dir.x += 1f;
-            if (kb.aKey.isPressed || kb.leftArrowKey.isPressed)  dir.x -= 1f;
-            _rawKeyboardDir = dir;
+            if (!IsServer)
+            {
+                float speed = balanceData != null ? balanceData.moveSpeed : 5f;
+                Vector2 moveDir = GetLocalMoveInput();
+                SubmitMoveInputServerRpc(moveDir);
+                MoveServerAuthoritative(moveDir, speed, Time.deltaTime);
+            }
         }
 
         private void FixedUpdate()
@@ -76,14 +90,13 @@ namespace FrentePartido.Player
 
             if (IsOwner && !IsServer)
             {
-                SubmitMoveInputServerRpc(moveDir);
                 return;
             }
 
             if (!IsServer) return;
             if (!IsOwner) moveDir = _serverMoveDir;
 
-            MoveServerAuthoritative(moveDir, speed);
+            MoveServerAuthoritative(moveDir, speed, Time.fixedDeltaTime);
         }
 
         private Vector2 GetLocalMoveInput()
@@ -99,22 +112,28 @@ namespace FrentePartido.Player
             return moveDir;
         }
 
-        private void MoveServerAuthoritative(Vector2 moveDir, float speed)
+        private void MoveServerAuthoritative(Vector2 moveDir, float speed, float deltaTime)
         {
-            if (!_movementEnabled && moveDir.sqrMagnitude < 0.01f) return;
+            if (!_movementEnabled) return;
 
             // Normalize to prevent diagonal speed boost
             if (moveDir.sqrMagnitude > 1f)
                 moveDir.Normalize();
 
-            Vector2 targetPos = _rb.position + moveDir * speed * Time.fixedDeltaTime;
+            Vector2 currentPos = _rb != null ? _rb.position : (Vector2)transform.position;
+            Vector2 delta = moveDir * speed * deltaTime;
 
             // Clamp to map bounds if available
             if (mapDefinition != null)
             {
-                targetPos.x = Mathf.Clamp(targetPos.x, mapDefinition.boundsMin.x, mapDefinition.boundsMax.x);
-                targetPos.y = Mathf.Clamp(targetPos.y, mapDefinition.boundsMin.y, mapDefinition.boundsMax.y);
+                Vector2 clampedPos = currentPos + delta;
+                clampedPos.x = Mathf.Clamp(clampedPos.x, mapDefinition.boundsMin.x, mapDefinition.boundsMax.x);
+                clampedPos.y = Mathf.Clamp(clampedPos.y, mapDefinition.boundsMin.y, mapDefinition.boundsMax.y);
+                delta = clampedPos - currentPos;
             }
+
+            delta = ResolveBlockingDelta(delta);
+            Vector2 targetPos = currentPos + delta;
 
             // Try physics-aware MovePosition first; if the rigidbody is kinematic
             // or somehow frozen, fall back to a raw transform move so the owner
@@ -125,9 +144,46 @@ namespace FrentePartido.Player
                 transform.position = new Vector3(targetPos.x, targetPos.y, transform.position.z);
         }
 
-        [ServerRpc]
-        private void SubmitMoveInputServerRpc(Vector2 moveDir)
+        private Vector2 ResolveBlockingDelta(Vector2 delta)
         {
+            if (_bodyCollider == null || !_bodyCollider.enabled || delta.sqrMagnitude < 0.000001f)
+                return delta;
+
+            Vector2 dir = delta.normalized;
+            float distance = delta.magnitude;
+            var filter = new ContactFilter2D
+            {
+                useTriggers = false,
+                useLayerMask = true,
+                layerMask = Physics2D.DefaultRaycastLayers
+            };
+
+            int count = _bodyCollider.Cast(dir, filter, _moveHits, distance + 0.04f);
+            float allowed = distance;
+            for (int i = 0; i < count; i++)
+            {
+                Collider2D col = _moveHits[i].collider;
+                if (col == null || col == _bodyCollider) continue;
+                if (col.attachedRigidbody != null && col.attachedRigidbody == _rb) continue;
+                if (!IsBlockingCollider(col)) continue;
+                if (Vector2.Dot(_moveHits[i].normal, -dir) < 0.35f) continue;
+
+                allowed = Mathf.Min(allowed, Mathf.Max(0f, _moveHits[i].distance - 0.04f));
+            }
+
+            return dir * allowed;
+        }
+
+        private static bool IsBlockingCollider(Collider2D col)
+        {
+            string n = col.gameObject.name;
+            return n.StartsWith("Wall_") || n.StartsWith("Cover_") || n.StartsWith("Decor_Crate") || n.StartsWith("Decor_Barrel");
+        }
+
+        [ServerRpc(RequireOwnership = false)]
+        private void SubmitMoveInputServerRpc(Vector2 moveDir, ServerRpcParams rpcParams = default)
+        {
+            if (OwnerClientId != rpcParams.Receive.SenderClientId) return;
             _serverMoveDir = moveDir.sqrMagnitude > 1f ? moveDir.normalized : moveDir;
         }
 

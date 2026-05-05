@@ -18,8 +18,8 @@ MonoBehaviour:
   spawnPointB: {x: 7, y: 0}
   beaconPosition: {x: 0, y: 0}
   pickupSpawnPoints:
-  - {x: -3.5, y: 2.5}
-  - {x: 3.5, y: -2.5}
-  - {x: 0, y: 3.5}
+  - {x: -2.8, y: -4.4}
+  - {x: 2.8, y: 4.4}
+  - {x: 0, y: -4.4}
   boundsMin: {x: -10, y: -6}
   boundsMax: {x: 10, y: 6}

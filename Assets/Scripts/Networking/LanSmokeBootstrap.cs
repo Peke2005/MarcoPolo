@@ -18,6 +18,7 @@ namespace FrentePartido.Networking
     {
         private const string HostArg = "-fpLanHost";
         private const string ClientArg = "-fpLanClient";
+        private const string ObserveClientMoveArg = "-fpObserveClientMoveSmoke";
 
         public static bool HasLanSmokeArgs()
         {
@@ -81,6 +82,11 @@ namespace FrentePartido.Networking
                 if (_isHost && HasArg(args, "-fpCombatSmoke"))
                 {
                     StartCoroutine(RunCombatSmoke());
+                }
+
+                if (_isHost && HasArg(args, ObserveClientMoveArg))
+                {
+                    StartCoroutine(RunObserveClientMoveSmoke());
                 }
 
                 if (!_isHost && HasArg(args, "-fpMoveSmoke"))
@@ -199,7 +205,10 @@ namespace FrentePartido.Networking
                 }
 
                 Vector3 start = localPlayer.transform.position;
-                motor.SetExternalMoveInput(Vector2.right);
+                yield return new WaitForSeconds(4f);
+                start = localPlayer.transform.position;
+                Debug.Log($"[LanSmoke] Move check owner={localPlayer.IsOwner} ownerId={localPlayer.OwnerClientId} localId={nm.LocalClientId} motorEnabled={motor.enabled} movementEnabled={motor.IsMovementEnabled}");
+                motor.SetExternalMoveInput(Vector2.up);
                 yield return new WaitForSeconds(2f);
                 motor.SetExternalMoveInput(Vector2.zero);
                 yield return new WaitForSeconds(0.5f);
@@ -212,6 +221,65 @@ namespace FrentePartido.Networking
                 {
                     Debug.LogError("[LanSmoke] Move check failed: client player did not move");
                     Application.Quit(7);
+                }
+            }
+
+            private IEnumerator RunObserveClientMoveSmoke()
+            {
+                var nm = NetworkManager.Singleton;
+                float deadline = Time.realtimeSinceStartup + 12f;
+                NetworkObject clientPlayer = null;
+
+                while (Time.realtimeSinceStartup < deadline)
+                {
+                    if (nm != null && nm.ConnectedClientsIds.Count >= 2)
+                    {
+                        foreach (NetworkObject netObj in nm.SpawnManager.SpawnedObjectsList)
+                        {
+                            if (netObj == null || !netObj.IsSpawned || !netObj.IsPlayerObject) continue;
+                            if (netObj.OwnerClientId != NetworkManager.ServerClientId)
+                            {
+                                clientPlayer = netObj;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (clientPlayer != null) break;
+                    yield return new WaitForSeconds(0.25f);
+                }
+
+                if (clientPlayer == null)
+                {
+                    Debug.LogError("[LanSmoke] Host observe move failed: client player missing");
+                    Application.Quit(8);
+                    yield break;
+                }
+
+                Vector3 start = clientPlayer.transform.position;
+                yield return new WaitForSeconds(4f);
+                if (clientPlayer == null || !clientPlayer.IsSpawned)
+                {
+                    Debug.LogError("[LanSmoke] Host observe move failed: client disconnected before movement window");
+                    Application.Quit(8);
+                    yield break;
+                }
+                start = clientPlayer.transform.position;
+                yield return new WaitForSeconds(3.5f);
+                if (clientPlayer == null || !clientPlayer.IsSpawned)
+                {
+                    Debug.LogError("[LanSmoke] Host observe move failed: client disconnected during movement window");
+                    Application.Quit(8);
+                    yield break;
+                }
+                Vector3 end = clientPlayer.transform.position;
+                float moved = Vector2.Distance(start, end);
+                Debug.Log($"[LanSmoke] Host observe move start={start} end={end} moved={moved:0.00}");
+
+                if (moved < 0.5f)
+                {
+                    Debug.LogError("[LanSmoke] Host observe move failed: server did not receive client movement");
+                    Application.Quit(9);
                 }
             }
 

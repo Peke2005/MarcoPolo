@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 using FrentePartido.Data;
+using FrentePartido.Player;
 
 namespace FrentePartido.Networking
 {
@@ -104,7 +105,10 @@ namespace FrentePartido.Networking
 
         private void SpawnPlayerForClient(ulong clientId)
         {
-            if (_spawnedPlayers.ContainsKey(clientId)) return;
+            if (_spawnedPlayers.TryGetValue(clientId, out NetworkObject cached) && cached != null && cached.IsSpawned)
+                return;
+
+            _spawnedPlayers.Remove(clientId);
 
             // Determine spawn point based on join order
             int slotIndex = _joinOrder.IndexOf(clientId);
@@ -123,6 +127,15 @@ namespace FrentePartido.Networking
             }
 
             Vector3 worldPos = new Vector3(spawnPos.x, spawnPos.y, 0f);
+            NetworkObject existing = FindExistingPlayerForClient(clientId);
+            if (existing != null)
+            {
+                MoveNetworkPlayer(existing, worldPos);
+                _spawnedPlayers[clientId] = existing;
+                Debug.Log($"[Spawn] Reused existing player for client {clientId} at {worldPos} | Faction: {faction}");
+                return;
+            }
+
             GameObject playerGO = Instantiate(_playerPrefab, worldPos, Quaternion.identity);
 
             NetworkObject netObj = playerGO.GetComponent<NetworkObject>();
@@ -141,6 +154,55 @@ namespace FrentePartido.Networking
             _spawnedPlayers[clientId] = netObj;
 
             Debug.Log($"[Spawn] Spawned player for client {clientId} at {worldPos} | Faction: {faction}");
+        }
+
+        private NetworkObject FindExistingPlayerForClient(ulong clientId)
+        {
+            if (NetworkManager.Singleton == null || NetworkManager.Singleton.SpawnManager == null)
+                return null;
+
+            NetworkObject chosen = null;
+            List<NetworkObject> duplicates = new List<NetworkObject>();
+            foreach (var kv in NetworkManager.Singleton.SpawnManager.SpawnedObjects)
+            {
+                NetworkObject obj = kv.Value;
+                if (obj == null || !obj.IsSpawned) continue;
+                if (obj.OwnerClientId != clientId) continue;
+                if (obj.GetComponent<PlayerHealth>() == null && obj.GetComponentInChildren<PlayerHealth>() == null)
+                    continue;
+
+                if (chosen == null)
+                {
+                    chosen = obj;
+                    continue;
+                }
+
+                duplicates.Add(obj);
+            }
+
+            for (int i = 0; i < duplicates.Count; i++)
+            {
+                NetworkObject duplicate = duplicates[i];
+                if (duplicate != null && duplicate.IsSpawned)
+                {
+                    Debug.LogWarning($"[Spawn] Duplicate player for client {clientId} removed: {duplicate.NetworkObjectId}");
+                    duplicate.Despawn(true);
+                }
+            }
+
+            return chosen;
+        }
+
+        private static void MoveNetworkPlayer(NetworkObject netObj, Vector3 worldPos)
+        {
+            netObj.transform.position = worldPos;
+            Rigidbody2D rb = netObj.GetComponent<Rigidbody2D>();
+            if (rb != null)
+            {
+                rb.position = worldPos;
+                rb.velocity = Vector2.zero;
+                rb.angularVelocity = 0f;
+            }
         }
 
         // ── Public API ──────────────────────────────────────────────
@@ -169,7 +231,7 @@ namespace FrentePartido.Networking
                     ? _mapDefinition.spawnPointA
                     : _mapDefinition.spawnPointB;
 
-                netObj.transform.position = new Vector3(spawnPos.x, spawnPos.y, 0f);
+                MoveNetworkPlayer(netObj, new Vector3(spawnPos.x, spawnPos.y, 0f));
 
                 // Notify clients of the teleport
                 RespawnPlayerClientRpc(clientId, spawnPos);

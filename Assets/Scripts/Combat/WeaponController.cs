@@ -42,6 +42,7 @@ namespace FrentePartido.Combat
         private float _fireCooldown;
         private bool _fireHeld;
         private Coroutine _reloadCoroutine;
+        private readonly RaycastHit2D[] _shotHits = new RaycastHit2D[16];
 
         private void Awake()
         {
@@ -151,23 +152,7 @@ namespace FrentePartido.Combat
             // Decrement ammo
             CurrentAmmo.Value--;
 
-            // Hitscan raycast
-            RaycastHit2D hit = Physics2D.Raycast(origin, spreadDir, weaponData.range, hitLayers | obstacleLayer);
-
-            if (hit.collider != null)
-            {
-                PlayerHealth targetHealth = hit.collider.GetComponent<PlayerHealth>();
-                if (targetHealth == null)
-                    targetHealth = hit.collider.GetComponentInParent<PlayerHealth>();
-
-                if (targetHealth != null && targetHealth != _playerHealth && !targetHealth.IsDead)
-                {
-                    float distance = hit.distance;
-                    int damage = DamageDealer.CalculateDamage(weaponData.damage, distance, weaponData.range);
-                    ulong sourceId = rpcParams.Receive.SenderClientId;
-                    targetHealth.ApplyDamageServer(damage, sourceId);
-                }
-            }
+            ResolveServerHitscan(origin, spreadDir, rpcParams.Receive.SenderClientId);
 
             // Notify all clients for VFX/SFX
             OnFireClientRpc(origin, spreadDir);
@@ -214,6 +199,11 @@ namespace FrentePartido.Combat
                     tracer.Initialize(direction);
                 }
             }
+            else
+            {
+                float tracerRange = weaponData != null ? weaponData.range : 15f;
+                FxManager.SpawnBulletTracer(origin, direction, tracerRange);
+            }
 
             // Spawn muzzle flash (configured prefab or procedural fallback)
             if (weaponData != null && weaponData.muzzleFlashPrefab != null)
@@ -238,13 +228,68 @@ namespace FrentePartido.Combat
 
             // Client-side hit spark via visual raycast (approximation of server hit)
             float range = weaponData != null ? weaponData.range : 15f;
-            RaycastHit2D visHit = Physics2D.Raycast(origin, direction, range);
+            RaycastHit2D visHit = FindFirstVisualHit(origin, direction, range);
             if (visHit.collider != null)
             {
                 FxManager.SpawnHitSpark(visHit.point);
                 if (visHit.collider.GetComponentInParent<PlayerHealth>() != null)
                     FxManager.PlayHit(visHit.point, 0.4f);
             }
+        }
+
+        private void ResolveServerHitscan(Vector2 origin, Vector2 direction, ulong sourceId)
+        {
+            int mask = hitLayers | obstacleLayer;
+            int count = Physics2D.RaycastNonAlloc(origin, direction, _shotHits, weaponData.range, mask);
+            if (count <= 0) return;
+
+            System.Array.Sort(_shotHits, 0, count, RaycastHitDistanceComparer.Instance);
+
+            for (int i = 0; i < count; i++)
+            {
+                RaycastHit2D hit = _shotHits[i];
+                Collider2D col = hit.collider;
+                if (col == null || col.isTrigger) continue;
+
+                PlayerHealth targetHealth = col.GetComponent<PlayerHealth>() ?? col.GetComponentInParent<PlayerHealth>();
+                if (targetHealth == _playerHealth) continue;
+
+                if (targetHealth != null)
+                {
+                    if (targetHealth.IsDead) return;
+                    int damage = DamageDealer.CalculateDamage(weaponData.damage, hit.distance, weaponData.range);
+                    targetHealth.ApplyDamageServer(damage, sourceId);
+                    return;
+                }
+
+                if (IsBlockingHit(col)) return;
+            }
+        }
+
+        private RaycastHit2D FindFirstVisualHit(Vector2 origin, Vector2 direction, float range)
+        {
+            int count = Physics2D.RaycastNonAlloc(origin, direction, _shotHits, range);
+            if (count <= 0) return default;
+
+            System.Array.Sort(_shotHits, 0, count, RaycastHitDistanceComparer.Instance);
+
+            for (int i = 0; i < count; i++)
+            {
+                RaycastHit2D hit = _shotHits[i];
+                Collider2D col = hit.collider;
+                if (col == null || col.isTrigger) continue;
+                PlayerHealth targetHealth = col.GetComponent<PlayerHealth>() ?? col.GetComponentInParent<PlayerHealth>();
+                if (targetHealth == _playerHealth) continue;
+                return hit;
+            }
+
+            return default;
+        }
+
+        private static bool IsBlockingHit(Collider2D col)
+        {
+            string n = col.gameObject.name;
+            return n.StartsWith("Wall_") || n.StartsWith("Cover_") || n.StartsWith("Decor_");
         }
 
         [ClientRpc]
@@ -319,6 +364,16 @@ namespace FrentePartido.Combat
         {
             int max = weaponData != null ? weaponData.magazineSize : 8;
             OnAmmoChanged?.Invoke(newValue, max);
+        }
+
+        private sealed class RaycastHitDistanceComparer : System.Collections.Generic.IComparer<RaycastHit2D>
+        {
+            public static readonly RaycastHitDistanceComparer Instance = new();
+
+            public int Compare(RaycastHit2D a, RaycastHit2D b)
+            {
+                return a.distance.CompareTo(b.distance);
+            }
         }
     }
 }

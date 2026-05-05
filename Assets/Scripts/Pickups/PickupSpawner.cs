@@ -80,6 +80,7 @@ namespace FrentePartido.Pickups
         {
             if (prefab == null) return;
 
+            position = ResolveSafePickupPosition(position);
             var go = Instantiate(prefab, position, Quaternion.identity);
             var netObj = go.GetComponent<NetworkObject>();
             if (netObj != null)
@@ -87,6 +88,47 @@ namespace FrentePartido.Pickups
                 netObj.Spawn();
                 _activePickups.Add(netObj);
             }
+        }
+
+        private static Vector2 ResolveSafePickupPosition(Vector2 desired)
+        {
+            Vector2[] offsets =
+            {
+                Vector2.zero,
+                new Vector2(0f, 0.8f),
+                new Vector2(0f, -0.8f),
+                new Vector2(0.8f, 0f),
+                new Vector2(-0.8f, 0f),
+                new Vector2(0.8f, 0.8f),
+                new Vector2(-0.8f, 0.8f),
+                new Vector2(0.8f, -0.8f),
+                new Vector2(-0.8f, -0.8f),
+                new Vector2(1.3f, 0f),
+                new Vector2(-1.3f, 0f)
+            };
+
+            for (int i = 0; i < offsets.Length; i++)
+            {
+                Vector2 candidate = desired + offsets[i];
+                if (IsPickupSpotClear(candidate)) return candidate;
+            }
+
+            return desired;
+        }
+
+        private static bool IsPickupSpotClear(Vector2 position)
+        {
+            Collider2D[] hits = Physics2D.OverlapCircleAll(position, 0.45f);
+            for (int i = 0; i < hits.Length; i++)
+            {
+                Collider2D hit = hits[i];
+                if (hit == null || hit.isTrigger) continue;
+                string n = hit.gameObject.name;
+                if (n.StartsWith("Wall_") || n.StartsWith("Cover_") || n.StartsWith("Decor_"))
+                    return false;
+            }
+
+            return true;
         }
 
         public void ScheduleRespawn(NetworkObject pickup)

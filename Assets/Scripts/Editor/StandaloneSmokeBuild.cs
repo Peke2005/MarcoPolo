@@ -2,6 +2,7 @@
 using System.IO;
 using UnityEditor;
 using UnityEditor.Build.Reporting;
+using UnityEngine;
 
 namespace FrentePartido.Editor
 {
@@ -27,6 +28,8 @@ namespace FrentePartido.Editor
 
         public static void BuildGameSceneWindows()
         {
+            ConfigureStandaloneWindow();
+
             string outputDir = Path.GetFullPath("Builds/Smoke/MarcoPoloSmoke");
             Directory.CreateDirectory(outputDir);
 
@@ -49,6 +52,8 @@ namespace FrentePartido.Editor
 
         public static void BuildWindowsRelease()
         {
+            ConfigureStandaloneWindow();
+
             string outputDir = Path.GetFullPath("Builds/Release/FrentePartido");
             Directory.CreateDirectory(outputDir);
 
@@ -67,6 +72,15 @@ namespace FrentePartido.Editor
             }
 
             UnityEngine.Debug.Log($"[StandaloneSmokeBuild] Release built {options.locationPathName}");
+        }
+
+        private static void ConfigureStandaloneWindow()
+        {
+            PlayerSettings.defaultScreenWidth = 1280;
+            PlayerSettings.defaultScreenHeight = 720;
+            PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
+            PlayerSettings.resizableWindow = true;
+            PlayerSettings.runInBackground = true;
         }
     }
 }

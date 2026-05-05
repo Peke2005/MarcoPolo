@@ -3,6 +3,7 @@ using System.Collections;
 using Unity.Netcode;
 using UnityEngine;
 using FrentePartido.Data;
+using FrentePartido.Combat;
 
 namespace FrentePartido.Match
 {
@@ -179,13 +180,28 @@ namespace FrentePartido.Match
 
         private void ResetRoundState()
         {
-            if (_player1Health != null) _player1Health.ResetHealth();
-            if (_player2Health != null) _player2Health.ResetHealth();
+            ResetPlayerForRound(_player1Health);
+            ResetPlayerForRound(_player2Health);
 
             if (_beacon != null) _beacon.ResetBeacon();
 
             var spawner = FindAnyObjectByType<Pickups.PickupSpawner>();
             if (spawner != null) spawner.ResetPickups();
+
+            ResetPlayerVisualsClientRpc();
+        }
+
+        private static void ResetPlayerForRound(Player.PlayerHealth health)
+        {
+            if (health == null) return;
+
+            health.ResetHealth();
+
+            var state = health.GetComponent<Player.PlayerStateController>();
+            if (state != null) state.ForceState(PlayerState.Idle);
+
+            var weapon = health.GetComponent<WeaponController>();
+            if (weapon != null) weapon.ResetWeapon();
         }
 
         [ClientRpc]
@@ -193,6 +209,13 @@ namespace FrentePartido.Match
         {
             foreach (var motor in FindObjectsByType<Player.PlayerMotor2D>(FindObjectsSortMode.None))
                 motor.SetMovementEnabled(enabled);
+        }
+
+        [ClientRpc]
+        private void ResetPlayerVisualsClientRpc()
+        {
+            foreach (var presentation in FindObjectsByType<Player.PlayerPresentation>(FindObjectsSortMode.None))
+                presentation.ResetVisuals();
         }
 
         [ClientRpc]

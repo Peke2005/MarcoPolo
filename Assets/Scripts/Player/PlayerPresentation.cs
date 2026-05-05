@@ -302,6 +302,18 @@ namespace FrentePartido.Player
             ApplyFactionColor((PlayerFaction)Faction.Value);
             ApplyRingColor((PlayerFaction)Faction.Value);
 
+            // Force weapon visible on every spawn (host or client). Prevents stale
+            // disabled state when prefab is reused or remote players spawn late.
+            if (weaponSprite != null)
+            {
+                weaponSprite.enabled = true;
+                if (weaponSprite.sprite == null && _gunSprite != null)
+                    weaponSprite.sprite = _gunSprite;
+            }
+            if (mainSprite != null) mainSprite.enabled = true;
+            if (ringSprite != null) ringSprite.enabled = true;
+            if (shadowSprite != null) shadowSprite.enabled = true;
+
             // Subscribe to health events
             if (_health != null)
             {

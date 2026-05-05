@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   weaponName: "Fusil Est\xE1ndar"
   weaponId: rifle_standard
-  damage: 20
+  damage: 25
   fireRate: 4
   magazineSize: 8
   reloadTime: 1.4

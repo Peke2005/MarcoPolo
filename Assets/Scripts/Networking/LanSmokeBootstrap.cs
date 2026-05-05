@@ -67,7 +67,7 @@ namespace FrentePartido.Networking
                 nm.NetworkConfig.NetworkTransport = transport;
                 transport.SetConnectionData(address, port, "0.0.0.0");
 
-                RegisterPlayerPrefab(nm);
+                NetworkPrefabRegistry.RegisterDefaults(nm);
 
                 bool ok = _isHost ? nm.StartHost() : nm.StartClient();
                 Debug.Log($"[LanSmoke] Start {(_isHost ? "host" : "client")} addr={address} port={port} ok={ok}");
@@ -193,25 +193,6 @@ namespace FrentePartido.Networking
                 return nm;
             }
 
-            private static void RegisterPlayerPrefab(NetworkManager nm)
-            {
-                var spawn = FindFirstObjectByType<PlayerSpawnManager>();
-                if (spawn == null || spawn.PlayerPrefab == null)
-                {
-                    Debug.LogWarning("[LanSmoke] PlayerSpawnManager/PlayerPrefab missing.");
-                    return;
-                }
-
-                try
-                {
-                    nm.AddNetworkPrefab(spawn.PlayerPrefab);
-                    Debug.Log("[LanSmoke] Registered player prefab.");
-                }
-                catch (System.Exception e)
-                {
-                    Debug.LogWarning($"[LanSmoke] AddNetworkPrefab: {e.Message}");
-                }
-            }
         }
 
         private static bool HasArg(string[] args, string key)

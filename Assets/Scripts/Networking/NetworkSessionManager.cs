@@ -132,10 +132,7 @@ namespace FrentePartido.Networking
             // Registered prefab list still must contain valid NetworkObjects for spawned prefabs.
             _networkManager.NetworkConfig.ForceSamePrefabs = false;
 
-            if (_networkManager.NetworkConfig.Prefabs.NetworkPrefabsLists.Count == 0)
-            {
-                Debug.LogWarning("[Session] NetworkPrefabsLists is empty. Spawned NetworkObjects may fail on clients.");
-            }
+            NetworkPrefabRegistry.RegisterDefaults(_networkManager);
 
             return true;
         }

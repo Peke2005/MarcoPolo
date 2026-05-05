@@ -36,6 +36,26 @@ if ($localOk) {
     } finally {
         Pop-Location
     }
+
+    try {
+        curl.exe -sS --max-time 2 "http://127.0.0.1:$Port/health" | Out-Null
+        $localOk = $LASTEXITCODE -eq 0
+    } catch {
+        $localOk = $false
+    }
+
+    if (-not $localOk) {
+        $node = Get-Command node -ErrorAction SilentlyContinue
+        if ($node) {
+            $log = Join-Path $backend 'auth-server.log'
+            $errLog = Join-Path $backend 'auth-server.err.log'
+            Write-Host "Docker unavailable. Starting local Node backend. Log: $log"
+            Start-Process -FilePath $node.Source -ArgumentList @('src/server.js') -WorkingDirectory $backend -WindowStyle Hidden -RedirectStandardOutput $log -RedirectStandardError $errLog
+            Start-Sleep -Seconds 2
+        } else {
+            Write-Warning "Node.js not found. Install Node or start Docker Desktop."
+        }
+    }
 }
 
 try {

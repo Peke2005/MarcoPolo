@@ -18,6 +18,9 @@ namespace FrentePartido.Player
         private Rigidbody2D _rb;
         private PlayerInputReader _input;
         private bool _movementEnabled = true;
+        private Vector2 _rawKeyboardDir;
+        private Vector2 _serverMoveDir;
+        private Vector2 _externalMoveDir;
 
         private void Awake()
         {
@@ -38,7 +41,7 @@ namespace FrentePartido.Player
             }
             else
             {
-                _rb.bodyType = RigidbodyType2D.Dynamic;
+                _rb.bodyType = IsServer ? RigidbodyType2D.Dynamic : RigidbodyType2D.Kinematic;
                 _rb.gravityScale = 0f; // Top-down, no gravity
                 _rb.freezeRotation = true;
                 _movementEnabled = true;
@@ -64,18 +67,40 @@ namespace FrentePartido.Player
             _rawKeyboardDir = dir;
         }
 
-        private Vector2 _rawKeyboardDir;
-
         private void FixedUpdate()
         {
-            if (!IsSpawned || !IsOwner) return;
+            if (!IsSpawned) return;
 
             float speed = balanceData != null ? balanceData.moveSpeed : 5f;
+            Vector2 moveDir = GetLocalMoveInput();
+
+            if (IsOwner && !IsServer)
+            {
+                SubmitMoveInputServerRpc(moveDir);
+                return;
+            }
+
+            if (!IsServer) return;
+            if (!IsOwner) moveDir = _serverMoveDir;
+
+            MoveServerAuthoritative(moveDir, speed);
+        }
+
+        private Vector2 GetLocalMoveInput()
+        {
+            if (_externalMoveDir.sqrMagnitude > 0.01f)
+                return _externalMoveDir;
+
             Vector2 moveDir = _input != null ? _input.MoveInput : Vector2.zero;
 
             if (moveDir.sqrMagnitude < 0.01f)
                 moveDir = _rawKeyboardDir;
 
+            return moveDir;
+        }
+
+        private void MoveServerAuthoritative(Vector2 moveDir, float speed)
+        {
             if (!_movementEnabled && moveDir.sqrMagnitude < 0.01f) return;
 
             // Normalize to prevent diagonal speed boost
@@ -98,6 +123,17 @@ namespace FrentePartido.Player
                 _rb.MovePosition(targetPos);
             else
                 transform.position = new Vector3(targetPos.x, targetPos.y, transform.position.z);
+        }
+
+        [ServerRpc]
+        private void SubmitMoveInputServerRpc(Vector2 moveDir)
+        {
+            _serverMoveDir = moveDir.sqrMagnitude > 1f ? moveDir.normalized : moveDir;
+        }
+
+        public void SetExternalMoveInput(Vector2 moveDir)
+        {
+            _externalMoveDir = moveDir.sqrMagnitude > 1f ? moveDir.normalized : moveDir;
         }
 
         /// <summary>

@@ -83,6 +83,11 @@ namespace FrentePartido.Networking
                     StartCoroutine(RunCombatSmoke());
                 }
 
+                if (!_isHost && HasArg(args, "-fpMoveSmoke"))
+                {
+                    StartCoroutine(RunClientMoveSmoke());
+                }
+
                 if (quitAfter > 0f)
                 {
                     StartCoroutine(CaptureAndQuit(args, quitAfter));
@@ -160,6 +165,53 @@ namespace FrentePartido.Networking
                 if (!damageOk || !deathOk)
                 {
                     Application.Quit(4);
+                }
+            }
+
+            private IEnumerator RunClientMoveSmoke()
+            {
+                var nm = NetworkManager.Singleton;
+                float deadline = Time.realtimeSinceStartup + 10f;
+                NetworkObject localPlayer = null;
+
+                while (Time.realtimeSinceStartup < deadline)
+                {
+                    localPlayer = nm != null && nm.SpawnManager != null
+                        ? nm.SpawnManager.GetLocalPlayerObject()
+                        : null;
+                    if (localPlayer != null) break;
+                    yield return new WaitForSeconds(0.25f);
+                }
+
+                if (localPlayer == null)
+                {
+                    Debug.LogError("[LanSmoke] Move check failed: local player missing");
+                    Application.Quit(5);
+                    yield break;
+                }
+
+                var motor = localPlayer.GetComponent<PlayerMotor2D>();
+                if (motor == null)
+                {
+                    Debug.LogError("[LanSmoke] Move check failed: PlayerMotor2D missing");
+                    Application.Quit(6);
+                    yield break;
+                }
+
+                Vector3 start = localPlayer.transform.position;
+                motor.SetExternalMoveInput(Vector2.right);
+                yield return new WaitForSeconds(2f);
+                motor.SetExternalMoveInput(Vector2.zero);
+                yield return new WaitForSeconds(0.5f);
+
+                Vector3 end = localPlayer.transform.position;
+                float moved = Vector2.Distance(start, end);
+                Debug.Log($"[LanSmoke] Move check start={start} end={end} moved={moved:0.00}");
+
+                if (moved < 0.5f)
+                {
+                    Debug.LogError("[LanSmoke] Move check failed: client player did not move");
+                    Application.Quit(7);
                 }
             }
 

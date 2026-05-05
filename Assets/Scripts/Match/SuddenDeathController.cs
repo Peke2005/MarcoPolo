@@ -1,12 +1,12 @@
 using Unity.Netcode;
 using UnityEngine;
 using FrentePartido.Data;
+using FrentePartido.Core;
 
 namespace FrentePartido.Match
 {
     /// <summary>
-    /// Sudden death marker. Cover must stay stable between rounds; removing it
-    /// makes the map desync visually and breaks collision readability.
+    /// Sudden death clears breakable cover on all peers. Round reset rebuilds it.
     /// </summary>
     public class SuddenDeathController : NetworkBehaviour
     {
@@ -14,12 +14,19 @@ namespace FrentePartido.Match
 
         public void StartSuddenDeath()
         {
-            Debug.Log("[SuddenDeath] Started. Cover remains intact.");
+            BreakCoverClientRpc();
         }
 
         public void StopSuddenDeath()
         {
             Debug.Log("[SuddenDeath] Stopped.");
+        }
+
+        [ClientRpc]
+        private void BreakCoverClientRpc()
+        {
+            int removed = GameplayVisualNormalizer.BreakSuddenDeathCover();
+            Debug.Log($"[SuddenDeath] Started. Breakable cover removed: {removed}");
         }
     }
 }

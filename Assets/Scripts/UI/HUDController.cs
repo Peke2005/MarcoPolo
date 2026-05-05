@@ -61,6 +61,7 @@ namespace FrentePartido.UI
                 _localWeapon.OnAmmoChanged += UpdateAmmo;
                 _localWeapon.OnReloadStarted += HandleReloadStarted;
                 _localWeapon.OnReloadFinished += HandleReloadFinished;
+                _localWeapon.OnGrenadeCountChanged += UpdateGrenadeCount;
             }
             if (_reloadBar != null) _reloadBar.fillAmount = 0f;
             if (_localAbility != null)
@@ -84,6 +85,7 @@ namespace FrentePartido.UI
                 _localWeapon.OnAmmoChanged -= UpdateAmmo;
                 _localWeapon.OnReloadStarted -= HandleReloadStarted;
                 _localWeapon.OnReloadFinished -= HandleReloadFinished;
+                _localWeapon.OnGrenadeCountChanged -= UpdateGrenadeCount;
             }
             if (_localAbility != null)
                 _localAbility.OnCooldownChanged -= UpdateAbilityCooldown;
@@ -192,9 +194,38 @@ namespace FrentePartido.UI
             {
                 int magSize = 8;
                 UpdateAmmo(weapon.CurrentAmmo.Value, magSize);
+                UpdateGrenadeCount(weapon.GrenadesRemaining.Value);
             }
             if (MatchManager.Instance != null)
                 UpdateScore(MatchManager.Instance.Player1Score.Value, MatchManager.Instance.Player2Score.Value);
+
+            ConfigureAbilityIcon(ability);
+        }
+
+        private void ConfigureAbilityIcon(Abilities.AbilityController ability)
+        {
+            if (_abilityCooldown == null || ability == null) return;
+            var def = ability.CurrentAbility;
+            if (def == null)
+            {
+                _abilityCooldown.ConfigureForAbility("Q", new Color(0.4f, 0.4f, 0.4f, 1f));
+                return;
+            }
+            string label = def.type switch
+            {
+                FrentePartido.Data.AbilityType.Dash => "D",
+                FrentePartido.Data.AbilityType.Shield => "S",
+                FrentePartido.Data.AbilityType.Mine => "M",
+                _ => "Q"
+            };
+            Color tint = def.type switch
+            {
+                FrentePartido.Data.AbilityType.Dash => new Color(0.25f, 0.85f, 1f, 1f),
+                FrentePartido.Data.AbilityType.Shield => new Color(0.30f, 0.55f, 1f, 1f),
+                FrentePartido.Data.AbilityType.Mine => new Color(1f, 0.45f, 0.18f, 1f),
+                _ => new Color(0.5f, 0.5f, 0.5f, 1f)
+            };
+            _abilityCooldown.ConfigureForAbility(label, tint);
         }
 
         private void UpdateHealth(int current, int max)
@@ -205,7 +236,7 @@ namespace FrentePartido.UI
 
         private void UpdateArmor(int armor)
         {
-            if (_armorText != null) _armorText.text = armor > 0 ? $"+{armor}" : "";
+            if (_armorText != null) _armorText.text = armor.ToString();
             if (_armorBar != null) _armorBar.fillAmount = (float)armor / 50f;
         }
 
@@ -281,6 +312,11 @@ namespace FrentePartido.UI
         {
             if (_grenadeIcon != null)
                 _grenadeIcon.color = available ? _grenadeAvailableColor : _grenadeUsedColor;
+        }
+
+        private void UpdateGrenadeCount(int count)
+        {
+            SetGrenadeAvailable(count > 0);
         }
 
         public void ShowAnnouncement(string text, float duration = 2f)

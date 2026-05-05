@@ -690,7 +690,7 @@ namespace FrentePartido.Core
             var reloadBar = FindDeepChild(hud.transform, "ReloadBar")?.GetComponent<Image>();
             if (reloadBar != null) reloadBar.fillAmount = 0f;
             var armorTxt = FindDeepChild(hud.transform, "ArmorText")?.GetComponent<TMPro.TMP_Text>();
-            if (armorTxt != null) armorTxt.text = "";
+            if (armorTxt != null) armorTxt.text = "0";
 
             foreach (var image in hud.GetComponentsInChildren<Image>(true))
             {

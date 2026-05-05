@@ -27,12 +27,14 @@ namespace FrentePartido.Combat
         // --- Network State ---
         public NetworkVariable<int> CurrentAmmo = new(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
         public NetworkVariable<bool> IsReloading = new(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+        public NetworkVariable<int> GrenadesRemaining = new(1, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
         // --- Events (client-side, for UI/VFX) ---
         public event Action<int, int> OnAmmoChanged;
         public event Action OnReloadStarted;
         public event Action OnReloadFinished;
         public event Action OnWeaponFired;
+        public event Action<int> OnGrenadeCountChanged;
 
         // --- Cached Components ---
         private PlayerInputReader _input;
@@ -65,27 +67,32 @@ namespace FrentePartido.Combat
             if (IsServer)
             {
                 CurrentAmmo.Value = weaponData != null ? weaponData.magazineSize : 8;
+                GrenadesRemaining.Value = 1;
             }
 
             CurrentAmmo.OnValueChanged += HandleAmmoChanged;
+            GrenadesRemaining.OnValueChanged += HandleGrenadeCountChanged;
 
             if (IsOwner && _input != null)
             {
                 _input.OnFirePressed += HandleFirePressed;
                 _input.OnFireReleased += HandleFireReleased;
                 _input.OnReloadPressed += HandleReloadPressed;
+                _input.OnGrenadePressed += HandleGrenadePressed;
             }
         }
 
         public override void OnNetworkDespawn()
         {
             CurrentAmmo.OnValueChanged -= HandleAmmoChanged;
+            GrenadesRemaining.OnValueChanged -= HandleGrenadeCountChanged;
 
             if (IsOwner && _input != null)
             {
                 _input.OnFirePressed -= HandleFirePressed;
                 _input.OnFireReleased -= HandleFireReleased;
                 _input.OnReloadPressed -= HandleReloadPressed;
+                _input.OnGrenadePressed -= HandleGrenadePressed;
             }
 
             base.OnNetworkDespawn();
@@ -136,6 +143,44 @@ namespace FrentePartido.Combat
             if (weaponData != null && CurrentAmmo.Value >= weaponData.magazineSize) return;
 
             ReloadServerRpc();
+        }
+
+        private void HandleGrenadePressed()
+        {
+            if (GrenadesRemaining.Value <= 0) return;
+            if (_playerHealth != null && _playerHealth.IsDead) return;
+
+            Vector2 origin = firePoint != null ? (Vector2)firePoint.position : (Vector2)transform.position;
+            Vector2 aimPos = _input != null ? _input.AimWorldPosition : (Vector2)transform.up;
+            Vector2 direction = (aimPos - origin).normalized;
+            if (direction.sqrMagnitude < 0.01f) direction = Vector2.right;
+
+            ThrowGrenadeServerRpc(origin, direction);
+        }
+
+        [ServerRpc]
+        private void ThrowGrenadeServerRpc(Vector2 origin, Vector2 direction, ServerRpcParams rpcParams = default)
+        {
+            if (GrenadesRemaining.Value <= 0) return;
+            if (_playerHealth != null && _playerHealth.IsDead) return;
+
+            GameObject grenadePrefab = Resources.Load<GameObject>("NetworkPrefabs/Grenade");
+            if (grenadePrefab == null)
+            {
+                Debug.LogError("[WeaponController] Grenade prefab not found in Resources/NetworkPrefabs.");
+                return;
+            }
+
+            GameObject go = Instantiate(grenadePrefab, origin, Quaternion.identity);
+            var netObj = go.GetComponent<NetworkObject>();
+            if (netObj == null) { Destroy(go); return; }
+            netObj.Spawn(true);
+
+            var grenade = go.GetComponent<GrenadeController>();
+            if (grenade != null)
+                grenade.Launch(direction, rpcParams.Receive.SenderClientId);
+
+            GrenadesRemaining.Value = Mathf.Max(0, GrenadesRemaining.Value - 1);
         }
 
         // ----- Server RPCs -----
@@ -363,6 +408,7 @@ namespace FrentePartido.Combat
 
             IsReloading.Value = false;
             CurrentAmmo.Value = weaponData != null ? weaponData.magazineSize : 8;
+            GrenadesRemaining.Value = 1;
         }
 
         // ----- Callbacks -----
@@ -371,6 +417,11 @@ namespace FrentePartido.Combat
         {
             int max = weaponData != null ? weaponData.magazineSize : 8;
             OnAmmoChanged?.Invoke(newValue, max);
+        }
+
+        private void HandleGrenadeCountChanged(int oldValue, int newValue)
+        {
+            OnGrenadeCountChanged?.Invoke(newValue);
         }
 
         private sealed class RaycastHitDistanceComparer : System.Collections.Generic.IComparer<RaycastHit2D>

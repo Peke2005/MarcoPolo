@@ -61,12 +61,28 @@ try {
         Write-Host "Firewall rule created: $ruleName"
     }
 } catch {
-    Write-Warning "Firewall rule not created. Run PowerShell as admin if friends cannot reach port $Port. $($_.Exception.Message)"
+    Write-Warning "Firewall rule not created because this PowerShell is not admin. This is only a problem if friends cannot login. $($_.Exception.Message)"
 }
 
 Write-Host 'Local health:'
 curl.exe -sS --max-time 5 "http://127.0.0.1:$Port/health"
 Write-Host "`nRadmin health ($RadminIp):"
-curl.exe -sS --max-time 5 "http://$RadminIp`:$Port/health"
+$radminHealthOk = $false
+try {
+    $radminHealth = curl.exe -sS --max-time 5 "http://$RadminIp`:$Port/health"
+    Write-Host $radminHealth
+    if ($LASTEXITCODE -eq 0 -and $radminHealth -match '"status"\s*:\s*"ok"') {
+        $radminHealthOk = $true
+    }
+} catch {
+    Write-Host $_.Exception.Message
+}
+
+if ($radminHealthOk) {
+    Write-Host "`nOK: backend is reachable through Radmin on this PC."
+    Write-Host "If your friend still cannot login, open PowerShell as admin and run this script again to create the firewall rule."
+} else {
+    Write-Warning "Radmin health failed. Check Radmin VPN and Windows Firewall on this PC."
+}
+
 Write-Host "`nFriend auth URL should be: http://$RadminIp`:$Port"
-Write-Host "If Radmin health fails: check Radmin VPN and Windows Firewall on this PC."

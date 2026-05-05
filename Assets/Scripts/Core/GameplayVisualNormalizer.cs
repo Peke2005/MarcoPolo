@@ -629,6 +629,10 @@ namespace FrentePartido.Core
             var hud = GameObject.Find("HUDCanvas");
             if (hud == null) return;
 
+            // Anchor timer + score to top-left so they stay there at any window size.
+            AnchorTopLeft(hud, "RoundTimerText", new Vector2(20f, -20f), TMPro.TextAlignmentOptions.TopLeft);
+            AnchorTopLeft(hud, "RoundScoreText", new Vector2(20f, -70f), TMPro.TextAlignmentOptions.TopLeft);
+
             foreach (var image in hud.GetComponentsInChildren<Image>(true))
             {
                 string n = image.gameObject.name;
@@ -653,6 +657,33 @@ namespace FrentePartido.Core
                     image.color = new Color(1f, 0.86f, 0.35f, 0.95f);
                 }
             }
+        }
+
+        private static void AnchorTopLeft(GameObject hud, string childName, Vector2 anchoredPos, TMPro.TextAlignmentOptions align)
+        {
+            Transform t = FindDeepChild(hud.transform, childName);
+            if (t == null) return;
+            var rt = t as RectTransform;
+            if (rt == null) return;
+
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(0f, 1f);
+            rt.pivot = new Vector2(0f, 1f);
+            rt.anchoredPosition = anchoredPos;
+
+            var tmp = t.GetComponent<TMPro.TMP_Text>();
+            if (tmp != null) tmp.alignment = align;
+        }
+
+        private static Transform FindDeepChild(Transform parent, string name)
+        {
+            if (parent.name == name) return parent;
+            for (int i = 0; i < parent.childCount; i++)
+            {
+                Transform found = FindDeepChild(parent.GetChild(i), name);
+                if (found != null) return found;
+            }
+            return null;
         }
 
         // ── Crosshair UI ─────────────────────────────────────────────

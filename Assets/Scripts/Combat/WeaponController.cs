@@ -263,7 +263,7 @@ namespace FrentePartido.Combat
                 if (targetHealth != null)
                 {
                     if (targetHealth.IsDead) return;
-                    int damage = DamageDealer.CalculateDamage(weaponData.damage, hit.distance, weaponData.range);
+                    int damage = DamageDealer.CalculateDamage(weaponData.damage);
                     targetHealth.ApplyDamageServer(damage, sourceId);
                     Debug.Log($"[Combat] Hit {targetHealth.OwnerClientId} for {damage}. HP={targetHealth.CurrentHealth.Value}");
                     return;

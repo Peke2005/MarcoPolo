@@ -94,7 +94,10 @@ namespace FrentePartido.UI
         private void SubscribeToMatch()
         {
             if (MatchManager.Instance != null)
-                MatchManager.Instance.OnScoreChanged += UpdateScore;
+            {
+                MatchManager.Instance.OnKillsChanged += UpdateScore;
+                MatchManager.Instance.OnMatchWon += HandleMatchWon;
+            }
 
             var beacon = FindAnyObjectByType<BeaconCaptureController>();
             if (beacon != null)
@@ -104,7 +107,33 @@ namespace FrentePartido.UI
         private void UnsubscribeFromMatch()
         {
             if (MatchManager.Instance != null)
-                MatchManager.Instance.OnScoreChanged -= UpdateScore;
+            {
+                MatchManager.Instance.OnKillsChanged -= UpdateScore;
+                MatchManager.Instance.OnMatchWon -= HandleMatchWon;
+            }
+        }
+
+        private void HandleMatchWon(ulong winnerClientId)
+        {
+            string winnerLabel = "EMPATE";
+            var gs = FrentePartido.Networking.NetworkGameState.Instance;
+            if (gs != null)
+            {
+                if (winnerClientId == gs.Player1ClientId.Value) winnerLabel = "AZUL";
+                else if (winnerClientId == gs.Player2ClientId.Value) winnerLabel = "ROJO";
+            }
+
+            int p1 = MatchManager.Instance != null ? MatchManager.Instance.Player1Kills.Value : 0;
+            int p2 = MatchManager.Instance != null ? MatchManager.Instance.Player2Kills.Value : 0;
+            ShowAnnouncement($"GANA {winnerLabel}  {p1} - {p2}", 6f);
+
+            StartCoroutine(ReturnToMenuAfter(7f));
+        }
+
+        private IEnumerator ReturnToMenuAfter(float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            FrentePartido.Core.SceneFlowController.ReturnToMainMenu();
         }
 
         private void Update()
@@ -153,7 +182,7 @@ namespace FrentePartido.UI
                 UpdateAmmo(weapon.CurrentAmmo.Value, magSize);
             }
             if (MatchManager.Instance != null)
-                UpdateScore(MatchManager.Instance.Player1Score.Value, MatchManager.Instance.Player2Score.Value);
+                UpdateScore(MatchManager.Instance.Player1Kills.Value, MatchManager.Instance.Player2Kills.Value);
         }
 
         private void UpdateHealth(int current, int max)

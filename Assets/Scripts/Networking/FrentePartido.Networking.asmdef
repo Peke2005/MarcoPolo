@@ -5,6 +5,7 @@
         "FrentePartido.Data",
         "FrentePartido.Core",
         "FrentePartido.Player",
+        "FrentePartido.Combat",
         "Unity.Netcode.Runtime",
         "Unity.Services.Core",
         "Unity.Services.Authentication",

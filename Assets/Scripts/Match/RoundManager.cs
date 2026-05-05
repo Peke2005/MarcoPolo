@@ -134,22 +134,17 @@ namespace FrentePartido.Match
                 yield return null;
             }
 
-            if (!_roundActive) yield break; // Round ended by kill or capture
+            if (!_roundActive) yield break; // Defensive: only beacon capture ends early now.
 
-            // Time's up - evaluate winner
-            ulong winner = WinConditionEvaluator.EvaluateRoundWinner(
-                _player1Health, _player2Health, _beacon,
-                _player1ClientId, _player2ClientId);
-
-            if (winner == 0)
+            // Time expired. Deathmatch: highest kill count wins. Ties favor P1.
+            ulong winner = _player1ClientId;
+            if (MatchManager.Instance != null)
             {
-                // Sudden death
-                yield return StartCoroutine(SuddenDeathSequence());
+                int p1Kills = MatchManager.Instance.Player1Kills.Value;
+                int p2Kills = MatchManager.Instance.Player2Kills.Value;
+                winner = p2Kills > p1Kills ? _player2ClientId : _player1ClientId;
             }
-            else
-            {
-                EndRound(winner);
-            }
+            EndRound(winner);
         }
 
         private IEnumerator SuddenDeathSequence()
@@ -183,8 +178,25 @@ namespace FrentePartido.Match
         {
             if (!IsServer || !_roundActive) return;
 
-            _roundActive = false;
-            EndRound(killerClientId);
+            // Deathmatch: don't end the round on a kill. Score the killer and respawn
+            // the corpse after a short delay so the round can keep going until time.
+            ulong victimId = (_player1Health != null && _player1Health.IsDead)
+                ? _player1ClientId
+                : _player2ClientId;
+
+            if (MatchManager.Instance != null)
+                MatchManager.Instance.RegisterKillServer(killerClientId);
+
+            StartCoroutine(RespawnAfterDelay(victimId, 2f));
+        }
+
+        private IEnumerator RespawnAfterDelay(ulong victimId, float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            if (!IsServer || !_roundActive) yield break;
+
+            var spawn = FindAnyObjectByType<Networking.PlayerSpawnManager>();
+            if (spawn != null) spawn.RespawnSinglePlayer(victimId);
         }
 
         public void HandleBeaconCaptured(ulong captorClientId)

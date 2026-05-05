@@ -55,6 +55,7 @@ namespace FrentePartido.Core
             EnsurePlayerVisualWatcher();
             SkinHud();
             FixLayerMasks();
+            Debug.Log("[VisualNormalizer] Applied v2: sudden-death cover, HUD bottom-right, cyan crosshair.");
         }
 
 #if UNITY_EDITOR
@@ -764,12 +765,25 @@ namespace FrentePartido.Core
         // ── Crosshair UI ─────────────────────────────────────────────
         private static void BuildCrosshair()
         {
-            if (GameObject.Find("~Crosshair") != null) return;
-            var go = new GameObject("~Crosshair", typeof(Canvas), typeof(CanvasScaler));
+            GameObject go = GameObject.Find("~Crosshair");
+            if (go == null)
+            {
+                go = new GameObject("~Crosshair", typeof(Canvas), typeof(CanvasScaler));
+            }
+            else
+            {
+                foreach (var image in go.GetComponentsInChildren<Image>(true))
+                    image.enabled = false;
+                for (int i = go.transform.childCount - 1; i >= 0; i--)
+                    Object.Destroy(go.transform.GetChild(i).gameObject);
+            }
+
             var canvas = go.GetComponent<Canvas>();
+            if (canvas == null) canvas = go.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = 500;
             var scaler = go.GetComponent<CanvasScaler>();
+            if (scaler == null) scaler = go.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
 
             var outline = new GameObject("Outline", typeof(RectTransform), typeof(Image));
@@ -790,7 +804,8 @@ namespace FrentePartido.Core
             dotImage.color = new Color(0f, 1f, 1f, 1f);
             dotImage.raycastTarget = false;
 
-            go.AddComponent<CrosshairFollow>();
+            if (go.GetComponent<CrosshairFollow>() == null)
+                go.AddComponent<CrosshairFollow>();
             Cursor.visible = false;
         }
 

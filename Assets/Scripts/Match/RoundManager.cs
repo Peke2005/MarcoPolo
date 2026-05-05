@@ -134,43 +134,38 @@ namespace FrentePartido.Match
                 yield return null;
             }
 
-            if (!_roundActive) yield break; // Defensive: only beacon capture ends early now.
+            if (!_roundActive) yield break; // Round ended early by a kill.
 
-            // Time expired. Deathmatch: highest kill count wins. Ties favor P1.
-            ulong winner = _player1ClientId;
-            if (MatchManager.Instance != null)
-            {
-                int p1Kills = MatchManager.Instance.Player1Kills.Value;
-                int p2Kills = MatchManager.Instance.Player2Kills.Value;
-                winner = p2Kills > p1Kills ? _player2ClientId : _player1ClientId;
-            }
-            EndRound(winner);
+            // Time expired without a kill -> sudden death: destroy all cover and let
+            // them keep fighting. Round still ends only on a kill.
+            yield return StartCoroutine(SuddenDeathSequence());
         }
 
         private IEnumerator SuddenDeathSequence()
         {
             State.Value = RoundState.SuddenDeath;
-            float timer = _balance.suddenDeathDuration;
+            RoundTimer.Value = 0f;
 
             if (_suddenDeath != null)
                 _suddenDeath.StartSuddenDeath();
 
             AnnounceSuddenDeathClientRpc();
 
-            while (timer > 0f && _roundActive)
+            // No timer: round only ends when a kill fires HandlePlayerDied.
+            // Hard cap as safety so a stuck round never hangs forever.
+            float guard = 60f;
+            while (_roundActive && guard > 0f)
             {
-                timer -= Time.deltaTime;
-                RoundTimer.Value = timer;
+                guard -= Time.deltaTime;
                 yield return null;
             }
 
             if (!_roundActive) yield break;
 
-            ulong winner = WinConditionEvaluator.EvaluateSuddenDeathWinner(
-                _player1Health, _player2Health, _player1ClientId, _player2ClientId);
-
-            if (winner == 0) winner = _player1ClientId; // Fallback: no draws
-
+            // Stuck (no kill in 60s of sudden death) -> killer is whoever has more HP.
+            int hp1 = _player1Health != null ? _player1Health.CurrentHealth.Value : 0;
+            int hp2 = _player2Health != null ? _player2Health.CurrentHealth.Value : 0;
+            ulong winner = hp2 > hp1 ? _player2ClientId : _player1ClientId;
             EndRound(winner);
         }
 
@@ -178,25 +173,9 @@ namespace FrentePartido.Match
         {
             if (!IsServer || !_roundActive) return;
 
-            // Deathmatch: don't end the round on a kill. Score the killer and respawn
-            // the corpse after a short delay so the round can keep going until time.
-            ulong victimId = (_player1Health != null && _player1Health.IsDead)
-                ? _player1ClientId
-                : _player2ClientId;
-
-            if (MatchManager.Instance != null)
-                MatchManager.Instance.RegisterKillServer(killerClientId);
-
-            StartCoroutine(RespawnAfterDelay(victimId, 2f));
-        }
-
-        private IEnumerator RespawnAfterDelay(ulong victimId, float delay)
-        {
-            yield return new WaitForSeconds(delay);
-            if (!IsServer || !_roundActive) yield break;
-
-            var spawn = FindAnyObjectByType<Networking.PlayerSpawnManager>();
-            if (spawn != null) spawn.RespawnSinglePlayer(victimId);
+            // Kill ends the round. Killer wins.
+            _roundActive = false;
+            EndRound(killerClientId);
         }
 
         public void HandleBeaconCaptured(ulong captorClientId)
@@ -232,12 +211,23 @@ namespace FrentePartido.Match
             ResetPlayerForRound(_player1Health);
             ResetPlayerForRound(_player2Health);
 
+            // Move them back to spawn points (without this they stay where they died).
+            var spawn = FindAnyObjectByType<Networking.PlayerSpawnManager>();
+            if (spawn != null) spawn.RespawnPlayers();
+
             if (_beacon != null) _beacon.ResetBeacon();
 
             var spawner = FindAnyObjectByType<Pickups.PickupSpawner>();
             if (spawner != null) spawner.ResetPickups();
 
             ResetPlayerVisualsClientRpc();
+            RebuildDecorClientRpc();
+        }
+
+        [ClientRpc]
+        private void RebuildDecorClientRpc()
+        {
+            Core.GameplayVisualNormalizer.RebuildDecor();
         }
 
         private static void ResetPlayerForRound(Player.PlayerHealth health)

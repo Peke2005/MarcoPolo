@@ -95,9 +95,11 @@ namespace FrentePartido.UI
         {
             if (MatchManager.Instance != null)
             {
-                MatchManager.Instance.OnKillsChanged += UpdateScore;
+                MatchManager.Instance.OnScoreChanged += UpdateScore;
                 MatchManager.Instance.OnMatchWon += HandleMatchWon;
             }
+            if (RoundManager.Instance != null)
+                RoundManager.Instance.OnRoundStateChanged += HandleRoundStateChanged;
 
             var beacon = FindAnyObjectByType<BeaconCaptureController>();
             if (beacon != null)
@@ -108,9 +110,19 @@ namespace FrentePartido.UI
         {
             if (MatchManager.Instance != null)
             {
-                MatchManager.Instance.OnKillsChanged -= UpdateScore;
+                MatchManager.Instance.OnScoreChanged -= UpdateScore;
                 MatchManager.Instance.OnMatchWon -= HandleMatchWon;
             }
+            if (RoundManager.Instance != null)
+                RoundManager.Instance.OnRoundStateChanged -= HandleRoundStateChanged;
+        }
+
+        private void HandleRoundStateChanged(FrentePartido.Data.RoundState state)
+        {
+            if (state == FrentePartido.Data.RoundState.SuddenDeath)
+                ShowAnnouncement("MUERTE SUBITA", 3f);
+            else if (state == FrentePartido.Data.RoundState.Active)
+                ShowAnnouncement("PELEAD", 1.5f);
         }
 
         private void HandleMatchWon(ulong winnerClientId)
@@ -123,8 +135,8 @@ namespace FrentePartido.UI
                 else if (winnerClientId == gs.Player2ClientId.Value) winnerLabel = "ROJO";
             }
 
-            int p1 = MatchManager.Instance != null ? MatchManager.Instance.Player1Kills.Value : 0;
-            int p2 = MatchManager.Instance != null ? MatchManager.Instance.Player2Kills.Value : 0;
+            int p1 = MatchManager.Instance != null ? MatchManager.Instance.Player1Score.Value : 0;
+            int p2 = MatchManager.Instance != null ? MatchManager.Instance.Player2Score.Value : 0;
             ShowAnnouncement($"GANA {winnerLabel}  {p1} - {p2}", 6f);
 
             StartCoroutine(ReturnToMenuAfter(7f));
@@ -182,7 +194,7 @@ namespace FrentePartido.UI
                 UpdateAmmo(weapon.CurrentAmmo.Value, magSize);
             }
             if (MatchManager.Instance != null)
-                UpdateScore(MatchManager.Instance.Player1Kills.Value, MatchManager.Instance.Player2Kills.Value);
+                UpdateScore(MatchManager.Instance.Player1Score.Value, MatchManager.Instance.Player2Score.Value);
         }
 
         private void UpdateHealth(int current, int max)

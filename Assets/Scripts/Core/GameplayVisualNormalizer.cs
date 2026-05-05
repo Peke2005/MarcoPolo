@@ -64,6 +64,13 @@ namespace FrentePartido.Core
         }
 #endif
 
+        /// <summary>Re-create cover crates, barrels, grass for a fresh round.</summary>
+        public static void RebuildDecor()
+        {
+            EnsureTextures();
+            PopulateDecor();
+        }
+
         // ── Arena builder (runs only if scene has no Floor/Walls) ────
         private static void BuildArenaIfMissing()
         {

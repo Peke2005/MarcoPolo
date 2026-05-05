@@ -22,13 +22,13 @@ MonoBehaviour:
   beaconActivationTime: 30
   beaconCaptureTime: 5
   beaconRadius: 2
-  roundDuration: 120
+  roundDuration: 60
   roundIntroDuration: 3
-  roundEndDuration: 6
-  suddenDeathDuration: 15
+  roundEndDuration: 4
+  suddenDeathDuration: 30
   suddenDeathDamagePerSecond: 5
-  roundsToWin: 1
-  maxRounds: 1
+  roundsToWin: 5
+  maxRounds: 9
   pickup1SpawnTime: 20
   pickup2SpawnTime: 55
   healthPickupAmount: 25

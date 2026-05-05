@@ -1,67 +1,52 @@
 using Unity.Netcode;
 using UnityEngine;
 using FrentePartido.Data;
-using FrentePartido.Player;
 
 namespace FrentePartido.Match
 {
+    /// <summary>
+    /// Sudden death: when a round timer expires without a kill, all environment
+    /// cover and decor are removed so the two players have nowhere to hide and
+    /// must finish the round.
+    /// </summary>
     public class SuddenDeathController : NetworkBehaviour
     {
         [SerializeField] private BalanceTuningData _balance;
-        [SerializeField] private float _safeZoneRadius = 3f;
-        [SerializeField] private Transform _centerPoint;
-
-        private bool _active;
-        private float _damageTickTimer;
-        private const float DAMAGE_TICK_INTERVAL = 0.5f;
 
         public void StartSuddenDeath()
         {
-            if (!IsServer) return;
-            _active = true;
-            _damageTickTimer = 0f;
-            ShowSuddenDeathVisualsClientRpc();
+            ClearCoverEverywhere();
+            ClearCoverClientRpc();
         }
 
         public void StopSuddenDeath()
         {
-            _active = false;
-            HideSuddenDeathVisualsClientRpc();
+            // No-op: cover is rebuilt by GameplayVisualNormalizer when the next
+            // round starts (it runs at scene/round refresh time).
         }
 
-        private void Update()
+        private static void ClearCoverEverywhere()
         {
-            if (!IsServer || !_active) return;
+            // Decor (crates, barrels, grass) lives under ~ArenaDecor. Wipe the root
+            // outright so colliders, sprites, and shadows all vanish in one go.
+            var decorRoot = GameObject.Find("~ArenaDecor");
+            if (decorRoot != null) Destroy(decorRoot);
 
-            _damageTickTimer += Time.deltaTime;
-            if (_damageTickTimer < DAMAGE_TICK_INTERVAL) return;
-            _damageTickTimer = 0f;
-
-            Vector2 center = _centerPoint != null ? (Vector2)_centerPoint.position : Vector2.zero;
-            int tickDamage = Mathf.CeilToInt(_balance.suddenDeathDamagePerSecond * DAMAGE_TICK_INTERVAL);
-
-            foreach (var health in FindObjectsByType<PlayerHealth>(FindObjectsSortMode.None))
+            // Defensive: anything matching the cover/decor naming convention that
+            // ended up outside the root (legacy scenes, etc.).
+            foreach (var sr in FindObjectsByType<SpriteRenderer>(FindObjectsSortMode.None))
             {
-                if (health.IsDead) continue;
-
-                float dist = Vector2.Distance(health.transform.position, center);
-                if (dist > _safeZoneRadius)
-                {
-                    health.ApplyDamageServer(tickDamage, 0);
-                }
+                if (sr == null) continue;
+                string n = sr.gameObject.name;
+                if (n.StartsWith("Cover_") || n.StartsWith("Decor_"))
+                    Destroy(sr.gameObject);
             }
         }
 
         [ClientRpc]
-        private void ShowSuddenDeathVisualsClientRpc()
+        private void ClearCoverClientRpc()
         {
-            Debug.Log("[SuddenDeath] Zone shrinking - get to center!");
-        }
-
-        [ClientRpc]
-        private void HideSuddenDeathVisualsClientRpc()
-        {
-            // Hide danger zone visuals
+            ClearCoverEverywhere();
         }
     }
 }

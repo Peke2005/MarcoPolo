@@ -136,8 +136,8 @@ namespace FrentePartido.Match
 
             if (!_roundActive) yield break; // Round ended early by a kill.
 
-            // Time expired without a kill -> sudden death: destroy all cover and let
-            // them keep fighting. Round still ends only on a kill.
+            // Time expired without a kill -> sudden death. Keep the arena intact;
+            // round still ends only on a kill or hard safety cap.
             yield return StartCoroutine(SuddenDeathSequence());
         }
 
@@ -150,6 +150,7 @@ namespace FrentePartido.Match
                 _suddenDeath.StartSuddenDeath();
 
             AnnounceSuddenDeathClientRpc();
+            EnablePlayersClientRpc(true);
 
             // No timer: round only ends when a kill fires HandlePlayerDied.
             // Hard cap as safety so a stuck round never hangs forever.

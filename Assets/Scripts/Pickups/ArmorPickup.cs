@@ -7,14 +7,13 @@ namespace FrentePartido.Pickups
     {
         [SerializeField] private BalanceTuningData _balance;
 
-        protected override void ApplyEffect(GameObject player, ulong clientId)
+        protected override bool ApplyEffect(GameObject player, ulong clientId)
         {
             var health = player.GetComponentInParent<Player.PlayerHealth>();
-            if (health != null)
-            {
-                int amount = _balance != null ? _balance.armorPickupAmount : 25;
-                health.AddArmorServer(amount);
-            }
+            if (health == null) return false;
+            int amount = _balance != null ? _balance.armorPickupAmount : 25;
+            health.AddArmorServer(amount);
+            return true;
         }
     }
 }

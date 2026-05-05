@@ -4,9 +4,11 @@ namespace FrentePartido.Match
 {
     public static class WinConditionEvaluator
     {
+        public const ulong NoWinner = ulong.MaxValue;
+
         /// <summary>
         /// Evaluate round winner when time expires.
-        /// Returns winner clientId, or 0 if sudden death needed.
+        /// Returns winner clientId, or NoWinner if sudden death needed.
         /// </summary>
         public static ulong EvaluateRoundWinner(
             PlayerHealth p1Health, PlayerHealth p2Health,
@@ -31,7 +33,7 @@ namespace FrentePartido.Match
             }
 
             // Still tied - sudden death
-            return 0;
+            return NoWinner;
         }
 
         /// <summary>

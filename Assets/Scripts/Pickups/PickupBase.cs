@@ -58,6 +58,16 @@ namespace FrentePartido.Pickups
 
         private void OnTriggerEnter2D(Collider2D other)
         {
+            TryCollect(other);
+        }
+
+        private void OnTriggerStay2D(Collider2D other)
+        {
+            TryCollect(other);
+        }
+
+        private void TryCollect(Collider2D other)
+        {
             if (!IsServer || !IsAvailable.Value) return;
 
             var netObj = other.GetComponentInParent<NetworkObject>();
@@ -66,12 +76,13 @@ namespace FrentePartido.Pickups
             var health = other.GetComponentInParent<Player.PlayerHealth>();
             if (health == null || health.IsDead) return;
 
-            ApplyEffect(other.gameObject, netObj.OwnerClientId);
+            if (!ApplyEffect(other.gameObject, netObj.OwnerClientId)) return;
+
             IsAvailable.Value = false;
             PlayPickupEffectClientRpc();
         }
 
-        protected abstract void ApplyEffect(GameObject player, ulong clientId);
+        protected abstract bool ApplyEffect(GameObject player, ulong clientId);
 
         [ClientRpc]
         private void PlayPickupEffectClientRpc()

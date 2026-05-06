@@ -681,14 +681,13 @@ namespace FrentePartido.Core
             AnchorBottomLeftImage(hud, "ArmorBar_BG",  new Vector2(28f, 16f), new Vector2(224f, 14f));
             AnchorBottomRightImage(hud, "ReloadBar_BG", new Vector2(-28f, 22f), new Vector2(124f, 14f));
 
-            // Force initial bar fills so we never see a flash of a full armor bar
-            // before the local player's NetworkVariable values get pushed in.
-            var hpBar = FindDeepChild(hud.transform, "HealthBar")?.GetComponent<Image>();
-            if (hpBar != null) hpBar.fillAmount = 1f;
-            var armorBar = FindDeepChild(hud.transform, "ArmorBar")?.GetComponent<Image>();
-            if (armorBar != null) armorBar.fillAmount = 0f;
-            var reloadBar = FindDeepChild(hud.transform, "ReloadBar")?.GetComponent<Image>();
-            if (reloadBar != null) reloadBar.fillAmount = 0f;
+            // Force the bars into Filled mode horizontal-left every load. Without this
+            // a saved scene with Image.Type.Simple would render a full bar regardless
+            // of fillAmount, so HP/armor changes never seemed to apply visually.
+            ConfigureFillBar(FindDeepChild(hud.transform, "HealthBar")?.GetComponent<Image>(), 1f);
+            ConfigureFillBar(FindDeepChild(hud.transform, "ArmorBar")?.GetComponent<Image>(), 0f);
+            ConfigureFillBar(FindDeepChild(hud.transform, "ReloadBar")?.GetComponent<Image>(), 0f);
+            ConfigureFillBar(FindDeepChild(hud.transform, "BeaconCaptureBar")?.GetComponent<Image>(), 0f);
             var armorTxt = FindDeepChild(hud.transform, "ArmorText")?.GetComponent<TMPro.TMP_Text>();
             if (armorTxt != null) armorTxt.text = "0";
 
@@ -716,6 +715,19 @@ namespace FrentePartido.Core
                     image.color = new Color(1f, 0.86f, 0.35f, 0.95f);
                 }
             }
+        }
+
+        private static void ConfigureFillBar(Image img, float initialFill)
+        {
+            if (img == null) return;
+            img.type = Image.Type.Filled;
+            img.fillMethod = Image.FillMethod.Horizontal;
+            img.fillOrigin = (int)Image.OriginHorizontal.Left;
+            img.fillAmount = initialFill;
+            // Ensure a non-null sprite — Image.Filled with no sprite renders as a flat
+            // rect that ignores fillAmount on some Unity builds.
+            if (img.sprite == null)
+                img.sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/UISprite.psd");
         }
 
         private static void AnchorTopLeft(GameObject hud, string childName, Vector2 anchoredPos, TMPro.TextAlignmentOptions align)

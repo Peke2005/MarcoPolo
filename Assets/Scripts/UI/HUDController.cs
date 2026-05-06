@@ -488,9 +488,30 @@ namespace FrentePartido.UI
                 _grenadeIcon.color = available ? _grenadeAvailableColor : _grenadeUsedColor;
         }
 
+        private TMP_Text _grenadeLabel;
+        private void EnsureGrenadeLabel()
+        {
+            if (_grenadeLabel != null || _grenadeIcon == null) return;
+            var go = new GameObject("GrenadeLetter", typeof(RectTransform), typeof(TextMeshProUGUI));
+            go.transform.SetParent(_grenadeIcon.transform, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            _grenadeLabel = go.GetComponent<TMP_Text>();
+            _grenadeLabel.text = "G";
+            _grenadeLabel.alignment = TextAlignmentOptions.Center;
+            _grenadeLabel.fontSize = 22;
+            _grenadeLabel.fontStyle = FontStyles.Bold;
+            _grenadeLabel.color = new Color(0.2f, 0.2f, 0.2f, 1f);
+            _grenadeLabel.raycastTarget = false;
+        }
+
         private void UpdateGrenadeCount(int count)
         {
             SetGrenadeAvailable(count > 0);
+            EnsureGrenadeLabel();
+            if (_grenadeLabel != null)
+                _grenadeLabel.color = count > 0 ? new Color(0.15f, 0.15f, 0.15f, 1f) : new Color(0.5f, 0.5f, 0.5f, 0.6f);
         }
 
         public void ShowAnnouncement(string text, float duration = 2f)

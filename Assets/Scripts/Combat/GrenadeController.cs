@@ -136,6 +136,10 @@ namespace FrentePartido.Combat
             // Overlap check for all damageable objects in radius
             Collider2D[] hits = Physics2D.OverlapCircleAll(explosionPos, radius, damageableLayers);
 
+            // Track players we've already damaged so the same PlayerHealth isn't hit
+            // twice when both its body and a child collider land inside the radius.
+            var damagedPlayers = new System.Collections.Generic.HashSet<PlayerHealth>();
+
             foreach (Collider2D col in hits)
             {
                 PlayerHealth targetHealth = col.GetComponent<PlayerHealth>();
@@ -143,12 +147,15 @@ namespace FrentePartido.Combat
                     targetHealth = col.GetComponentInParent<PlayerHealth>();
 
                 if (targetHealth == null || targetHealth.IsDead) continue;
+                if (!damagedPlayers.Add(targetHealth)) continue;
 
                 Vector2 targetPos = (Vector2)col.transform.position;
                 float distance = Vector2.Distance(explosionPos, targetPos);
 
-                // Optional: line-of-sight check (grenades can damage through thin cover or not)
-                if (!DamageDealer.IsInLineOfSight(explosionPos, targetPos, obstacleLayer))
+                // LOS check using only WALL/COVER named colliders. The previous obstacle
+                // mask included triggers / the player's own body / the grenade itself,
+                // so a generic Linecast was always blocked and grenades never damaged.
+                if (!HasClearGrenadeLineOfSight(explosionPos, targetPos))
                     continue;
 
                 int damage = DamageDealer.CalculateGrenadeDamage(baseDamage, distance, radius);
@@ -189,6 +196,27 @@ namespace FrentePartido.Combat
             // Hide grenade sprite immediately on all clients
             if (spriteRenderer != null)
                 spriteRenderer.enabled = false;
+        }
+
+        private static readonly RaycastHit2D[] _losHits = new RaycastHit2D[16];
+
+        private static bool HasClearGrenadeLineOfSight(Vector2 from, Vector2 to)
+        {
+            Vector2 delta = to - from;
+            float dist = delta.magnitude;
+            if (dist < 0.001f) return true;
+
+            int count = Physics2D.RaycastNonAlloc(from, delta / dist, _losHits, dist);
+            for (int i = 0; i < count; i++)
+            {
+                var col = _losHits[i].collider;
+                if (col == null || col.isTrigger) continue;
+                string n = col.gameObject.name;
+                if (n.StartsWith("Wall_") || n.StartsWith("Cover_") ||
+                    n.StartsWith("Decor_Crate") || n.StartsWith("Decor_Barrel"))
+                    return false;
+            }
+            return true;
         }
 
         private IEnumerator DespawnAfterDelay(float delay)

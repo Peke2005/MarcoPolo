@@ -7,6 +7,22 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $backend = Join-Path $repo 'Backend'
 
+function Test-RealSupabaseEnv {
+    param([string]$EnvPath)
+
+    if (-not (Test-Path $EnvPath)) { return $false }
+
+    $line = Get-Content $EnvPath | Where-Object { $_ -match '^\s*DATABASE_URL\s*=' } | Select-Object -First 1
+    if ([string]::IsNullOrWhiteSpace($line)) { return $false }
+
+    $value = ($line -replace '^\s*DATABASE_URL\s*=\s*', '').Trim().Trim('"').Trim("'")
+    if ([string]::IsNullOrWhiteSpace($value)) { return $false }
+    if ($value -match 'PROJECT_REF|PASSWORD|change-me|your-|example') { return $false }
+    if ($value -notmatch '^postgres(ql)?://') { return $false }
+
+    return $true
+}
+
 if ([string]::IsNullOrWhiteSpace($RadminIp)) {
     $RadminIp = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
         Where-Object { $_.IPAddress -like '26.*' -and $_.InterfaceAlias -like '*Radmin*' } |
@@ -50,10 +66,7 @@ Write-Host "Starting auth backend Docker in $backend"
 Push-Location $backend
 try {
     $envPath = Join-Path $backend '.env'
-    $useSupabase = $false
-    if (Test-Path $envPath) {
-        $useSupabase = Select-String -Path $envPath -Pattern '^\s*DATABASE_URL\s*=' -Quiet
-    }
+    $useSupabase = Test-RealSupabaseEnv -EnvPath $envPath
 
     if ($useSupabase) {
         Write-Host "Supabase DATABASE_URL found in Backend\.env. Starting API without local Postgres container."

@@ -170,7 +170,17 @@ namespace FrentePartido.Editor
             foreach (string line in File.ReadAllLines(envPath))
             {
                 string trimmed = line.Trim();
-                if (trimmed.StartsWith("DATABASE_URL=") && trimmed.Length > "DATABASE_URL=".Length)
+                if (!trimmed.StartsWith("DATABASE_URL=") || trimmed.Length <= "DATABASE_URL=".Length)
+                    continue;
+
+                string value = trimmed.Substring("DATABASE_URL=".Length).Trim().Trim('"', '\'');
+                if (string.IsNullOrWhiteSpace(value))
+                    continue;
+                if (value.Contains("PROJECT_REF") || value.Contains("PASSWORD") ||
+                    value.Contains("change-me") || value.Contains("your-") ||
+                    value.Contains("example"))
+                    continue;
+                if (value.StartsWith("postgres://") || value.StartsWith("postgresql://"))
                     return true;
             }
             return false;

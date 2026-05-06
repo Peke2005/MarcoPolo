@@ -18,9 +18,14 @@ Clients must be connected to the same Radmin VPN if auth is hosted on a `26.x.x.
 
 1. Create Supabase project.
 2. Copy Postgres connection string from Supabase Dashboard -> Project Settings -> Database.
-3. Create `Backend\.env` from `Backend\.env.example`.
-4. Put your real `DATABASE_URL` and `JWT_SECRET`.
-5. Run host script. It detects `DATABASE_URL` and starts only the API container; database lives in Supabase.
+3. Run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Tools\ConfigureSupabaseBackend.ps1
+```
+
+4. Paste your real `DATABASE_URL` and a long `JWT_SECRET`.
+5. Run host script. It detects real `DATABASE_URL` and starts only the API container; database lives in Supabase.
 
 Do not commit `Backend\.env`.
 

@@ -309,7 +309,7 @@ namespace FrentePartido.Networking
             if (nm == null || nm.SpawnManager == null) yield break;
 
             bool found = false;
-            for (int attempt = 0; attempt < 30; attempt++)
+            for (int attempt = 0; attempt < 12; attempt++)
             {
                 foreach (var kv in nm.SpawnManager.SpawnedObjects)
                 {
@@ -330,10 +330,7 @@ namespace FrentePartido.Networking
 
                 if (found)
                 {
-                    // Keep snapping briefly. Owner-authoritative NetworkTransform can
-                    // push the old prefab position (0,0) for a few frames after spawn.
-                    yield return new WaitForSeconds(0.05f);
-                    continue;
+                    yield break;
                 }
 
                 yield return new WaitForSeconds(0.05f);

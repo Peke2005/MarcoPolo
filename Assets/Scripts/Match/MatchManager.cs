@@ -18,6 +18,7 @@ namespace FrentePartido.Match
         public NetworkVariable<byte> Player2Kills = new(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
         public NetworkVariable<byte> CurrentRound = new(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
         public NetworkVariable<MatchState> State = new(MatchState.WaitingForPlayers, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+        public NetworkVariable<GameMode> CurrentGameMode = new(GameMode.Rounds1v1, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
         public event Action<byte, byte> OnScoreChanged;
         public event Action<byte, byte> OnKillsChanged;
@@ -26,6 +27,7 @@ namespace FrentePartido.Match
         public event Action OnRematchRequested;
 
         private RoundManager _roundManager;
+        public bool IsDeathmatch => CurrentGameMode.Value == GameMode.Deathmatch;
 
         private void Awake()
         {
@@ -92,12 +94,18 @@ namespace FrentePartido.Match
             Player1Kills.Value = 0;
             Player2Kills.Value = 0;
             CurrentRound.Value = 0;
+            CurrentGameMode.Value = Networking.NetworkSessionManager.Instance != null
+                ? Networking.NetworkSessionManager.Instance.SelectedGameMode
+                : GameMode.Rounds1v1;
             State.Value = MatchState.InProgress;
 
             OnMatchStarted?.Invoke();
             NotifyMatchStartedClientRpc();
 
-            _roundManager.StartRound();
+            if (IsDeathmatch)
+                _roundManager.StartDeathmatch();
+            else
+                _roundManager.StartRound();
         }
 
         private void HandleRoundWon(ulong winnerClientId)
@@ -160,17 +168,44 @@ namespace FrentePartido.Match
         /// Server-only. Increment the killer's kill count (reuses Player1Score / Player2Score
         /// as the live deathmatch counter shown on the HUD).
         /// </summary>
-        public void RegisterKillServer(ulong killerClientId)
+        public bool RegisterKillServer(ulong killerClientId)
+        {
+            if (!IsServer) return false;
+
+            var netState = Networking.NetworkGameState.Instance;
+            if (netState == null) return false;
+
+            if (killerClientId == netState.Player1ClientId.Value)
+                Player1Kills.Value = (byte)Mathf.Min(Player1Kills.Value + 1, 255);
+            else if (killerClientId == netState.Player2ClientId.Value)
+                Player2Kills.Value = (byte)Mathf.Min(Player2Kills.Value + 1, 255);
+
+            int targetKills = _balance != null ? _balance.deathmatchKillsToWin : 20;
+            if (Player1Kills.Value >= targetKills)
+            {
+                EndMatch(netState.Player1ClientId.Value);
+                return true;
+            }
+            if (Player2Kills.Value >= targetKills)
+            {
+                EndMatch(netState.Player2ClientId.Value);
+                return true;
+            }
+
+            return false;
+        }
+
+        public void FinishDeathmatchByScoreServer()
         {
             if (!IsServer) return;
 
             var netState = Networking.NetworkGameState.Instance;
             if (netState == null) return;
 
-            if (killerClientId == netState.Player1ClientId.Value)
-                Player1Kills.Value = (byte)Mathf.Min(Player1Kills.Value + 1, 255);
-            else if (killerClientId == netState.Player2ClientId.Value)
-                Player2Kills.Value = (byte)Mathf.Min(Player2Kills.Value + 1, 255);
+            ulong winner = Player2Kills.Value > Player1Kills.Value
+                ? netState.Player2ClientId.Value
+                : netState.Player1ClientId.Value;
+            EndMatch(winner);
         }
     }
 }

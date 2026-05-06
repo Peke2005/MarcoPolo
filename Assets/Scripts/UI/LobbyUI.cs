@@ -31,6 +31,13 @@ namespace FrentePartido.UI
         [SerializeField] private TMP_Text _selectedAbilityDesc;
         [SerializeField] private Image[] _abilityHighlights;
 
+        [Header("Mode")]
+        [SerializeField] private Button _roundsModeButton;
+        [SerializeField] private Button _deathmatchModeButton;
+        [SerializeField] private Image _roundsModeBg;
+        [SerializeField] private Image _deathmatchModeBg;
+        [SerializeField] private TMP_Text _modeInfoText;
+
         [Header("Faction")]
         [SerializeField] private Button _blueButton;
         [SerializeField] private Button _redButton;
@@ -56,6 +63,7 @@ namespace FrentePartido.UI
         private bool _isReady;
         private int _selectedAbility;
         private int _selectedFaction;
+        private GameMode _selectedMode = GameMode.Rounds1v1;
         private float _copyTimer;
         private float _lobbyRefreshTimer;
         private bool _refreshingLobby;
@@ -106,8 +114,11 @@ namespace FrentePartido.UI
                 _startGameButton.gameObject.SetActive(isHost);
                 _startGameButton.interactable = false;
             }
+            if (_roundsModeButton != null) _roundsModeButton.interactable = isHost;
+            if (_deathmatchModeButton != null) _deathmatchModeButton.interactable = isHost;
 
             SelectAbility(GameConfig.Preferences.abilityIndex);
+            SelectMode(NetworkSessionManager.Instance != null ? NetworkSessionManager.Instance.SelectedGameMode : GameMode.Rounds1v1, false);
             _selectedFaction = 0;
 
             if (NetworkSessionManager.Instance != null)
@@ -291,20 +302,63 @@ namespace FrentePartido.UI
         void BuildLoadout(Transform p)
         {
             var section = LayoutRow("Loadout", p, 430);
-            var cols = Panel("Cols", section.transform, Color.clear);
-            Stretch(cols);
-            var hl = cols.gameObject.AddComponent<HorizontalLayoutGroup>();
-            hl.spacing = 12; hl.childForceExpandWidth = true; hl.childForceExpandHeight = true;
-            hl.childControlWidth = true; hl.childControlHeight = true;
+            var stack = Panel("LoadoutStack", section.transform, Color.clear);
+            Stretch(stack);
+            var vl = stack.gameObject.AddComponent<VerticalLayoutGroup>();
+            vl.spacing = 12;
+            vl.childForceExpandWidth = true;
+            vl.childForceExpandHeight = false;
+            vl.childControlWidth = true;
+            vl.childControlHeight = true;
 
-            BuildAbilities(cols.transform);
+            BuildGameMode(stack.transform);
+            BuildAbilities(stack.transform);
             // Faction selection removed: spawn order assigns Blue (host) and Red (client)
             // automatically via PlayerSpawnManager.
+        }
+
+        void BuildGameMode(Transform p)
+        {
+            var panel = Panel("ModePanel", p, CARD);
+            panel.gameObject.AddComponent<LayoutElement>().preferredHeight = 125;
+
+            var title = Txt("ModeTitle", panel.transform, "MODO DE JUEGO", 20, FontStyles.Bold, TXT);
+            Anchors(title, 0.05f, 0.68f, 0.30f, 0.95f);
+            title.alignment = TextAlignmentOptions.Left;
+            title.characterSpacing = 3;
+
+            _roundsModeButton = ModeBtn(panel.transform, "RoundsMode", "1V1 RONDAS", "Mejor de 5, faro y muerte subita", 0.32f, 0.04f, 0.62f, 0.92f, out _roundsModeBg);
+            _deathmatchModeButton = ModeBtn(panel.transform, "DeathmatchMode", "DEATHMATCH", "10 min - primero a 20 kills", 0.64f, 0.04f, 0.95f, 0.92f, out _deathmatchModeBg);
+
+            _modeInfoText = Txt("ModeInfo", panel.transform, "Host elige modo", 13, FontStyles.Bold, TXT2);
+            Anchors(_modeInfoText, 0.05f, 0.14f, 0.30f, 0.52f);
+            _modeInfoText.alignment = TextAlignmentOptions.Left;
+            _modeInfoText.enableWordWrapping = true;
+        }
+
+        Button ModeBtn(Transform p, string name, string title, string desc, float x1, float y1, float x2, float y2, out Image bg)
+        {
+            var rt = Panel(name, p, BTN);
+            Anchors(rt, x1, y1, x2, y2);
+            bg = rt.GetComponent<Image>();
+            var btn = rt.gameObject.AddComponent<Button>();
+
+            var t = Txt(name + "Title", rt.transform, title, 21, FontStyles.Bold, TXT);
+            Anchors(t, 0.05f, 0.48f, 0.95f, 0.88f);
+            t.alignment = TextAlignmentOptions.Center;
+            t.characterSpacing = 2;
+
+            var d = Txt(name + "Desc", rt.transform, desc, 13, FontStyles.Bold, TXT2);
+            Anchors(d, 0.07f, 0.12f, 0.93f, 0.45f);
+            d.alignment = TextAlignmentOptions.Center;
+            d.enableWordWrapping = true;
+            return btn;
         }
 
         void BuildAbilities(Transform p)
         {
             var panel = Panel("AbPanel", p, CARD);
+            panel.gameObject.AddComponent<LayoutElement>().preferredHeight = 290;
 
             var title = Txt("AbTitle", panel.transform, "HABILIDAD", 28, FontStyles.Bold, TXT);
             Anchors(title, 0.05f, 0.90f, 0.95f, 0.98f);
@@ -513,6 +567,8 @@ namespace FrentePartido.UI
             _dashButton?.onClick.AddListener(() => SelectAbility(0));
             _shieldButton?.onClick.AddListener(() => SelectAbility(1));
             _mineButton?.onClick.AddListener(() => SelectAbility(2));
+            _roundsModeButton?.onClick.AddListener(() => SelectMode(GameMode.Rounds1v1, true));
+            _deathmatchModeButton?.onClick.AddListener(() => SelectMode(GameMode.Deathmatch, true));
             _blueButton?.onClick.AddListener(() => SelectFaction(0));
             _redButton?.onClick.AddListener(() => SelectFaction(1));
             _readyButton?.onClick.AddListener(ToggleReady);
@@ -606,6 +662,22 @@ namespace FrentePartido.UI
             PublishLobbyState();
         }
 
+        void SelectMode(GameMode mode, bool publish)
+        {
+            _selectedMode = mode;
+            if (_roundsModeBg != null) _roundsModeBg.color = mode == GameMode.Rounds1v1 ? YELLOW : BTN;
+            if (_deathmatchModeBg != null) _deathmatchModeBg.color = mode == GameMode.Deathmatch ? YELLOW : BTN;
+            if (_modeInfoText != null)
+            {
+                _modeInfoText.text = mode == GameMode.Deathmatch
+                    ? "DEATHMATCH: 10 minutos, 20 kills."
+                    : "1V1: mejor de 5 rondas.";
+            }
+
+            if (publish && NetworkSessionManager.Instance != null && NetworkSessionManager.Instance.IsHost)
+                NetworkSessionManager.Instance.SetGameMode(mode);
+        }
+
         void SelectFaction(int faction)
         {
             _selectedFaction = faction;
@@ -647,6 +719,9 @@ namespace FrentePartido.UI
         void UpdatePlayerList()
         {
             var session = NetworkSessionManager.Instance;
+            if (session != null && session.SelectedGameMode != _selectedMode)
+                SelectMode(session.SelectedGameMode, false);
+
             var players = session != null
                 ? session.GetLobbyPlayers()
                 : System.Array.Empty<NetworkSessionManager.LobbyPlayerInfo>();

@@ -115,6 +115,7 @@ namespace FrentePartido.UI
             if (MatchManager.Instance != null)
             {
                 MatchManager.Instance.OnScoreChanged += UpdateScore;
+                MatchManager.Instance.OnKillsChanged += UpdateKills;
                 MatchManager.Instance.OnMatchWon += HandleMatchWon;
             }
             if (RoundManager.Instance != null)
@@ -131,6 +132,7 @@ namespace FrentePartido.UI
             if (MatchManager.Instance != null)
             {
                 MatchManager.Instance.OnScoreChanged -= UpdateScore;
+                MatchManager.Instance.OnKillsChanged -= UpdateKills;
                 MatchManager.Instance.OnMatchWon -= HandleMatchWon;
             }
             if (RoundManager.Instance != null)
@@ -326,6 +328,11 @@ namespace FrentePartido.UI
 
             int p1 = MatchManager.Instance != null ? MatchManager.Instance.Player1Score.Value : 0;
             int p2 = MatchManager.Instance != null ? MatchManager.Instance.Player2Score.Value : 0;
+            if (MatchManager.Instance != null && MatchManager.Instance.IsDeathmatch)
+            {
+                p1 = MatchManager.Instance.Player1Kills.Value;
+                p2 = MatchManager.Instance.Player2Kills.Value;
+            }
             ShowBigOverlay(
                 $"VICTORIA {ResolveFactionLabel(winnerClientId)}",
                 $"{p1} - {p2}",
@@ -406,7 +413,10 @@ namespace FrentePartido.UI
                 UpdateGrenadeCount(weapon.GrenadesRemaining.Value);
             }
             if (MatchManager.Instance != null)
+            {
                 UpdateScore(MatchManager.Instance.Player1Score.Value, MatchManager.Instance.Player2Score.Value);
+                UpdateKills(MatchManager.Instance.Player1Kills.Value, MatchManager.Instance.Player2Kills.Value);
+            }
 
             ConfigureAbilityIcon(ability);
         }
@@ -467,7 +477,19 @@ namespace FrentePartido.UI
 
         private void UpdateScore(byte p1, byte p2)
         {
+            if (MatchManager.Instance != null && MatchManager.Instance.IsDeathmatch)
+            {
+                UpdateKills(MatchManager.Instance.Player1Kills.Value, MatchManager.Instance.Player2Kills.Value);
+                return;
+            }
+
             if (_roundScoreText != null) _roundScoreText.text = $"{p1} - {p2}";
+        }
+
+        private void UpdateKills(byte p1, byte p2)
+        {
+            if (MatchManager.Instance == null || !MatchManager.Instance.IsDeathmatch) return;
+            if (_roundScoreText != null) _roundScoreText.text = $"KILLS {p1} - {p2}";
         }
 
         private void UpdateBeaconState(BeaconState state)

@@ -9,6 +9,12 @@ namespace FrentePartido.Data
         PostMatch
     }
 
+    public enum GameMode : byte
+    {
+        Rounds1v1,
+        Deathmatch
+    }
+
     public enum RoundState : byte
     {
         Intro,

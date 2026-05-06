@@ -31,6 +31,8 @@ namespace FrentePartido.Match
         private ulong _player1ClientId;
         private ulong _player2ClientId;
         private bool _roundActive;
+        private Action<ulong> _player1DeathHandler;
+        private Action<ulong> _player2DeathHandler;
 
         private void Awake()
         {
@@ -65,16 +67,18 @@ namespace FrentePartido.Match
 
         public void RegisterPlayers(Player.PlayerHealth p1, ulong p1Id, Player.PlayerHealth p2, ulong p2Id)
         {
-            if (_player1Health != null) _player1Health.OnPlayerDied -= HandlePlayerDied;
-            if (_player2Health != null) _player2Health.OnPlayerDied -= HandlePlayerDied;
+            if (_player1Health != null && _player1DeathHandler != null) _player1Health.OnPlayerDied -= _player1DeathHandler;
+            if (_player2Health != null && _player2DeathHandler != null) _player2Health.OnPlayerDied -= _player2DeathHandler;
 
             _player1Health = p1;
             _player1ClientId = p1Id;
             _player2Health = p2;
             _player2ClientId = p2Id;
 
-            _player1Health.OnPlayerDied += HandlePlayerDied;
-            _player2Health.OnPlayerDied += HandlePlayerDied;
+            _player1DeathHandler = killer => HandlePlayerDied(_player1ClientId, killer);
+            _player2DeathHandler = killer => HandlePlayerDied(_player2ClientId, killer);
+            _player1Health.OnPlayerDied += _player1DeathHandler;
+            _player2Health.OnPlayerDied += _player2DeathHandler;
         }
 
         private bool TryRegisterSpawnedPlayers()
@@ -114,6 +118,12 @@ namespace FrentePartido.Match
             StartCoroutine(RoundSequence());
         }
 
+        public void StartDeathmatch()
+        {
+            if (!IsServer) return;
+            StartCoroutine(DeathmatchSequence());
+        }
+
         private IEnumerator RoundSequence()
         {
             // Intro phase
@@ -127,7 +137,8 @@ namespace FrentePartido.Match
 
             ResetRoundState();
 
-            yield return StartCoroutine(IntroLockAndSpawnSequence(_balance.roundIntroDuration));
+            float intro = _balance != null ? _balance.roundIntroDuration : 3f;
+            yield return StartCoroutine(IntroLockAndSpawnSequence(intro));
 
             // Active phase
             State.Value = RoundState.Active;
@@ -183,13 +194,73 @@ namespace FrentePartido.Match
             EndRound(winner);
         }
 
-        private void HandlePlayerDied(ulong killerClientId)
+        private void HandlePlayerDied(ulong victimClientId, ulong killerClientId)
         {
             if (!IsServer || !_roundActive) return;
+
+            if (MatchManager.Instance != null && MatchManager.Instance.IsDeathmatch)
+            {
+                bool ended = MatchManager.Instance.RegisterKillServer(killerClientId);
+                if (ended)
+                {
+                    _roundActive = false;
+                    State.Value = RoundState.Ended;
+                    EnablePlayersClientRpc(false);
+                    return;
+                }
+
+                StartCoroutine(RespawnDeathmatchPlayer(victimClientId));
+                return;
+            }
 
             // Kill ends the round. Killer wins.
             _roundActive = false;
             EndRound(killerClientId);
+        }
+
+        private IEnumerator DeathmatchSequence()
+        {
+            State.Value = RoundState.Intro;
+            RoundTimer.Value = _balance != null ? _balance.deathmatchDuration : 600f;
+            _roundActive = false;
+
+            EnablePlayersClientRpc(false);
+            OnRoundStarting?.Invoke();
+            AnnounceDeathmatchClientRpc();
+            ResetRoundState();
+
+            float intro = _balance != null ? _balance.roundIntroDuration : 3f;
+            yield return StartCoroutine(IntroLockAndSpawnSequence(intro));
+
+            State.Value = RoundState.Active;
+            _roundActive = true;
+            EnablePlayersClientRpc(true);
+
+            while (_roundActive && RoundTimer.Value > 0f)
+            {
+                RoundTimer.Value -= Time.deltaTime;
+                yield return null;
+            }
+
+            if (!_roundActive) yield break;
+
+            _roundActive = false;
+            State.Value = RoundState.Ended;
+            EnablePlayersClientRpc(false);
+            MatchManager.Instance?.FinishDeathmatchByScoreServer();
+        }
+
+        private IEnumerator RespawnDeathmatchPlayer(ulong victimClientId)
+        {
+            float delay = _balance != null ? _balance.deathmatchRespawnDelay : 1.5f;
+            yield return new WaitForSeconds(delay);
+            if (!_roundActive || MatchManager.Instance == null || !MatchManager.Instance.IsDeathmatch) yield break;
+
+            var spawn = FindAnyObjectByType<Networking.PlayerSpawnManager>();
+            if (spawn != null)
+                spawn.RespawnSinglePlayer(victimClientId);
+
+            EnablePlayersClientRpc(true);
         }
 
         public void HandleBeaconCaptured(ulong captorClientId)
@@ -330,6 +401,12 @@ namespace FrentePartido.Match
         private void AnnounceSuddenDeathClientRpc()
         {
             Debug.Log("[Round] SUDDEN DEATH");
+        }
+
+        [ClientRpc]
+        private void AnnounceDeathmatchClientRpc()
+        {
+            Debug.Log("[Round] Deathmatch starting");
         }
     }
 }

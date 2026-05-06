@@ -70,15 +70,20 @@ namespace FrentePartido.Player
             if (kb != null)
             {
                 Vector2 dir = Vector2.zero;
-                if (kb.wKey.isPressed || kb.upArrowKey.isPressed)    dir.y += 1f;
-                if (kb.sKey.isPressed || kb.downArrowKey.isPressed)  dir.y -= 1f;
-                if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) dir.x += 1f;
-                if (kb.aKey.isPressed || kb.leftArrowKey.isPressed)  dir.x -= 1f;
+                if (_movementEnabled)
+                {
+                    if (kb.wKey.isPressed || kb.upArrowKey.isPressed)    dir.y += 1f;
+                    if (kb.sKey.isPressed || kb.downArrowKey.isPressed)  dir.y -= 1f;
+                    if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) dir.x += 1f;
+                    if (kb.aKey.isPressed || kb.leftArrowKey.isPressed)  dir.x -= 1f;
+                }
                 _rawKeyboardDir = dir;
             }
 
             float speed = balanceData != null ? balanceData.moveSpeed : 5f;
             Vector2 moveDir = GetLocalMoveInput();
+            if (!_movementEnabled)
+                moveDir = Vector2.zero;
 
             if (IsServer)
             {
@@ -258,9 +263,15 @@ namespace FrentePartido.Player
         public void SetMovementEnabled(bool enabled)
         {
             _movementEnabled = enabled;
+            if (_input != null && IsOwner)
+                _input.IsInputEnabled = enabled;
 
             if (!enabled)
             {
+                _rawKeyboardDir = Vector2.zero;
+                _serverMoveDir = Vector2.zero;
+                _externalMoveDir = Vector2.zero;
+                _lastSentMoveDir = Vector2.zero;
                 _rb.velocity = Vector2.zero;
             }
         }

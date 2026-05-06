@@ -6,6 +6,7 @@ using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
 using FrentePartido.Core;
+using FrentePartido.Data;
 
 namespace FrentePartido.Networking
 {
@@ -52,6 +53,7 @@ namespace FrentePartido.Networking
 
         public string JoinCode { get; private set; }
         public bool IsHost { get; private set; }
+        public GameMode SelectedGameMode { get; private set; } = GameMode.Rounds1v1;
 
         // ── Events ──────────────────────────────────────────────────
         public event Action OnSessionCreated;
@@ -490,6 +492,9 @@ namespace FrentePartido.Networking
 
         private void HandleLobbyStateMessage(ulong senderClientId, FastBufferReader reader)
         {
+            reader.ReadValueSafe(out byte mode);
+            SelectedGameMode = (GameMode)Mathf.Clamp(mode, 0, 1);
+
             reader.ReadValueSafe(out int count);
             _lobbyPlayers.Clear();
 
@@ -518,12 +523,21 @@ namespace FrentePartido.Networking
             UnregisterLobbyMessages();
             _lobbyPlayers.Clear();
             _localLobbyInfo = default;
+            SelectedGameMode = GameMode.Rounds1v1;
             OnLobbyPlayersChanged?.Invoke();
+        }
+
+        public void SetGameMode(GameMode mode)
+        {
+            if (!IsHost) return;
+            SelectedGameMode = mode;
+            BroadcastLobbyState();
         }
 
         private void WriteLobbyState(FastBufferWriter writer)
         {
             var players = GetLobbyPlayers();
+            writer.WriteValueSafe((byte)SelectedGameMode);
             writer.WriteValueSafe(players.Count);
             foreach (var player in players)
             {

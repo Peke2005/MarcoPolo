@@ -31,6 +31,9 @@ namespace FrentePartido.Data
         [Header("Match")]
         [Range(1, 5)] public int roundsToWin = 3;
         [Range(3, 9)] public int maxRounds = 5;
+        [Range(60f, 900f)] public float deathmatchDuration = 600f;
+        [Range(5, 50)] public int deathmatchKillsToWin = 20;
+        [Range(0.5f, 5f)] public float deathmatchRespawnDelay = 1.5f;
 
         [Header("Pickups")]
         [Range(5f, 40f)] public float pickup1SpawnTime = 20f;

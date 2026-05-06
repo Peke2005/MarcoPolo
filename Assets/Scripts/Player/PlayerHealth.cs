@@ -182,6 +182,9 @@ namespace FrentePartido.Player
             if (_stateController != null)
                 _stateController.SetState(PlayerState.Dead);
 
+            var motor = GetComponent<PlayerMotor2D>();
+            if (motor != null) motor.SetMovementEnabled(false);
+
             NotifyDeathClientRpc(killerClientId);
         }
 
@@ -194,6 +197,8 @@ namespace FrentePartido.Player
         [ClientRpc]
         private void NotifyDeathClientRpc(ulong killerClientId)
         {
+            var motor = GetComponent<PlayerMotor2D>();
+            if (motor != null) motor.SetMovementEnabled(false);
             OnPlayerDied?.Invoke(killerClientId);
         }
     }

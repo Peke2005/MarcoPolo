@@ -3,6 +3,7 @@ using Unity.Netcode;
 using UnityEngine;
 using FrentePartido.Data;
 using FrentePartido.Player;
+using FrentePartido.Core;
 
 namespace FrentePartido.Abilities
 {
@@ -78,6 +79,9 @@ namespace FrentePartido.Abilities
             if (IsServer)
                 ApplyAbilityFromLobby();
 
+            if (IsOwner && !IsServer)
+                SubmitOwnerAbilityServerRpc(GameConfig.Preferences.abilityIndex);
+
             if (IsOwner && _input != null)
             {
                 _input.OnAbilityPressed += HandleAbilityInput;
@@ -94,7 +98,7 @@ namespace FrentePartido.Abilities
             var lobby = session.GetLobbyPlayers();
             if (lobby == null) return;
 
-            int chosenIndex = -1;
+            int chosenIndex = IsOwner ? GameConfig.Preferences.abilityIndex : -1;
             foreach (var info in lobby)
             {
                 if (info.ClientId == OwnerClientId)
@@ -107,6 +111,16 @@ namespace FrentePartido.Abilities
             if (chosenIndex < 0 || chosenIndex >= availableAbilities.Length) return;
             EquippedAbilityIndex.Value = chosenIndex;
             Debug.Log($"[AbilityController] Player {OwnerClientId} equipped index {chosenIndex} from lobby selection.");
+        }
+
+        [ServerRpc]
+        private void SubmitOwnerAbilityServerRpc(int index, ServerRpcParams rpcParams = default)
+        {
+            if (rpcParams.Receive.SenderClientId != OwnerClientId) return;
+            if (index < 0 || availableAbilities == null || index >= availableAbilities.Length) return;
+
+            EquippedAbilityIndex.Value = index;
+            Debug.Log($"[AbilityController] Player {OwnerClientId} equipped index {index} from owner preference.");
         }
 
         public override void OnNetworkDespawn()
@@ -175,23 +189,28 @@ namespace FrentePartido.Abilities
         [ServerRpc]
         private void UseAbilityServerRpc(Vector2 aimDirection, ServerRpcParams rpcParams = default)
         {
+            TryUseEquippedAbilityServer(aimDirection);
+        }
+
+        public bool TryUseEquippedAbilityServer(Vector2 aimDirection)
+        {
             if (_isOnCooldown || CooldownRemaining.Value > 0f)
             {
                 Debug.Log($"[AbilityController] Ability on cooldown. Remaining: {CooldownRemaining.Value:F1}s");
-                return;
+                return false;
             }
 
             AbilityDefinition ability = CurrentAbility;
             if (ability == null)
             {
                 Debug.LogWarning("[AbilityController] No ability equipped or index out of range.");
-                return;
+                return false;
             }
 
             if (_stateController != null && !_stateController.CanUseAbility)
             {
                 Debug.Log("[AbilityController] Player state does not allow ability use.");
-                return;
+                return false;
             }
 
             // Set player state to UsingAbility
@@ -213,6 +232,8 @@ namespace FrentePartido.Abilities
             // Return to Idle state after ability
             if (_stateController != null)
                 _stateController.SetState(PlayerState.Idle);
+
+            return executed;
         }
 
         private bool ExecuteAbility(AbilityDefinition ability, Vector2 aimDirection)

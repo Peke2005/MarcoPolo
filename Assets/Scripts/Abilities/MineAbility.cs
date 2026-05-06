@@ -13,6 +13,7 @@ namespace FrentePartido.Abilities
     {
         [Header("Mine Settings")]
         [SerializeField] private Color mineColor = new Color(1f, 0.3f, 0.1f, 0.9f);
+        [SerializeField] private float visualScale = 0.46f;
 
         private GameObject _activeMineObj;
         private ulong _activeMineId;
@@ -66,10 +67,7 @@ namespace FrentePartido.Abilities
             mineObj.transform.localScale = Vector3.one;
 
             // Visual sprite — visible orange disc with darker center so it reads as a hazard.
-            SpriteRenderer sr = mineObj.AddComponent<SpriteRenderer>();
-            sr.sprite = GetMineSprite();
-            sr.color = mineColor;
-            sr.sortingOrder = 4;
+            CreateMineVisual(mineObj.transform, mineColor, visualScale, true);
 
             // Trigger collider for detection
             CircleCollider2D trigger = mineObj.AddComponent<CircleCollider2D>();
@@ -87,23 +85,33 @@ namespace FrentePartido.Abilities
         private static Sprite GetMineSprite()
         {
             if (_mineSprite != null) return _mineSprite;
-            int size = 96;
+            int size = 128;
             var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
             var px = new Color[size * size];
             Vector2 c = new Vector2((size - 1) * 0.5f, (size - 1) * 0.5f);
-            float outer = size * 0.42f;
-            float inner = size * 0.18f;
+            float outer = size * 0.40f;
+            float mid = size * 0.30f;
+            float core = size * 0.15f;
+            float lineHalfWidth = size * 0.022f;
             for (int y = 0; y < size; y++)
             for (int x = 0; x < size; x++)
             {
-                float d = Vector2.Distance(new Vector2(x, y), c);
+                Vector2 p = new Vector2(x, y);
+                float d = Vector2.Distance(p, c);
                 Color col = new Color(0, 0, 0, 0);
                 if (d <= outer)
                 {
                     float t = 1f - d / outer;
-                    col = new Color(1f, 0.45f + 0.2f * t, 0.18f * t, 1f);
-                    if (d < inner) col = new Color(0.85f, 0.10f, 0.08f, 1f);
-                    if (d > outer - 2f) col = new Color(0.10f, 0.06f, 0.04f, 1f); // border
+                    col = new Color(0.20f + 0.20f * t, 0.12f + 0.08f * t, 0.06f, 1f);
+                    if (d < mid) col = new Color(0.95f, 0.34f + 0.20f * t, 0.08f, 1f);
+                    if (d < core) col = new Color(1.0f, 0.78f, 0.14f, 1f);
+
+                    bool crossX = Mathf.Abs(p.x - c.x) < lineHalfWidth && d < mid;
+                    bool crossY = Mathf.Abs(p.y - c.y) < lineHalfWidth && d < mid;
+                    bool ring = d > mid - 3f && d < mid + 2f;
+                    bool outerRing = d > outer - 4f;
+                    if (crossX || crossY || ring || outerRing)
+                        col = new Color(0.08f, 0.04f, 0.02f, 1f);
                 }
                 px[y * size + x] = col;
             }
@@ -113,6 +121,55 @@ namespace FrentePartido.Abilities
             tex.Apply();
             _mineSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 96f);
             return _mineSprite;
+        }
+
+        private static Sprite _mineGlowSprite;
+        private static Sprite GetMineGlowSprite()
+        {
+            if (_mineGlowSprite != null) return _mineGlowSprite;
+            int size = 128;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            var px = new Color[size * size];
+            Vector2 c = new Vector2((size - 1) * 0.5f, (size - 1) * 0.5f);
+            float outer = size * 0.48f;
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float d = Vector2.Distance(new Vector2(x, y), c);
+                float a = d <= outer ? Mathf.Pow(1f - d / outer, 2.1f) * 0.55f : 0f;
+                px[y * size + x] = new Color(1f, 0.38f, 0.05f, a);
+            }
+            tex.SetPixels(px);
+            tex.filterMode = FilterMode.Bilinear;
+            tex.wrapMode = TextureWrapMode.Clamp;
+            tex.Apply();
+            _mineGlowSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 96f);
+            return _mineGlowSprite;
+        }
+
+        private static void CreateMineVisual(Transform parent, Color tint, float scale, bool addPulse)
+        {
+            GameObject holder = new GameObject("MineVisualRoot");
+            holder.transform.SetParent(parent, false);
+
+            GameObject glow = new GameObject("MineGlow");
+            glow.transform.SetParent(holder.transform, false);
+            glow.transform.localScale = Vector3.one * (scale * 1.45f);
+            var glowSr = glow.AddComponent<SpriteRenderer>();
+            glowSr.sprite = GetMineGlowSprite();
+            glowSr.color = new Color(tint.r, tint.g, tint.b, 0.85f);
+            glowSr.sortingOrder = 3;
+
+            GameObject core = new GameObject("MineCore");
+            core.transform.SetParent(holder.transform, false);
+            core.transform.localScale = Vector3.one * scale;
+            var sr = core.AddComponent<SpriteRenderer>();
+            sr.sprite = GetMineSprite();
+            sr.color = tint;
+            sr.sortingOrder = 4;
+
+            if (addPulse)
+                holder.AddComponent<MineVisualPulse>().Initialize();
         }
 
         private void DestroyActiveMine()
@@ -156,10 +213,7 @@ namespace FrentePartido.Abilities
 
             _activeMineVisual = new GameObject($"MineVisual_{OwnerClientId}");
             _activeMineVisual.transform.position = position;
-            var sr = _activeMineVisual.AddComponent<SpriteRenderer>();
-            sr.sprite = GetMineSprite();
-            sr.color = mineColor;
-            sr.sortingOrder = 4;
+            CreateMineVisual(_activeMineVisual.transform, mineColor, visualScale, true);
             _activeMineVisualId = mineId;
         }
 
@@ -280,6 +334,22 @@ namespace FrentePartido.Abilities
             }
 
             return null;
+        }
+    }
+
+    public class MineVisualPulse : MonoBehaviour
+    {
+        private float _phase;
+
+        public void Initialize()
+        {
+            _phase = Random.value * 10f;
+        }
+
+        private void Update()
+        {
+            float pulse = 1f + Mathf.Sin(Time.time * 5.5f + _phase) * 0.055f;
+            transform.localScale = Vector3.one * pulse;
         }
     }
 }

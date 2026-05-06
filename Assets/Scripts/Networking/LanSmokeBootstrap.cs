@@ -61,6 +61,9 @@ namespace FrentePartido.Networking
                 string address = GetArg(args, "-fpAddress", "127.0.0.1");
                 ushort port = (ushort)Mathf.Clamp(GetIntArg(args, "-fpPort", 7777), 1, 65535);
                 float quitAfter = Mathf.Max(0f, GetFloatArg(args, "-fpQuitAfter", 0f));
+                int abilityIndex = GetIntArg(args, "-fpAbilityIndex", -1);
+                if (abilityIndex >= 0)
+                    Core.GameConfig.Preferences.abilityIndex = Mathf.Clamp(abilityIndex, 0, 2);
 
                 var nm = EnsureNetworkManager();
                 var transport = nm.GetComponent<UnityTransport>() ?? nm.gameObject.AddComponent<UnityTransport>();
@@ -92,6 +95,12 @@ namespace FrentePartido.Networking
                 if (_isHost && HasArg(args, "-fpAbilitySmoke"))
                 {
                     StartCoroutine(RunAbilitySmoke());
+                }
+
+                if (_isHost && HasArg(args, "-fpAbilitySelectionSmoke"))
+                {
+                    int expected = Mathf.Clamp(GetIntArg(args, "-fpExpectedClientAbility", 2), 0, 2);
+                    StartCoroutine(RunAbilitySelectionSmoke(expected));
                 }
 
                 if (_isHost && HasArg(args, ObserveClientMoveArg))
@@ -335,6 +344,83 @@ namespace FrentePartido.Networking
                     Application.Quit(13);
             }
 
+            private IEnumerator RunAbilitySelectionSmoke(int expectedClientAbility)
+            {
+                var nm = NetworkManager.Singleton;
+                float deadline = Time.realtimeSinceStartup + 12f;
+                NetworkObject clientPlayer = null;
+
+                while (Time.realtimeSinceStartup < deadline)
+                {
+                    if (nm != null && nm.ConnectedClientsIds.Count >= 2)
+                    {
+                        foreach (NetworkObject netObj in nm.SpawnManager.SpawnedObjectsList)
+                        {
+                            if (netObj == null || !netObj.IsSpawned || !netObj.IsPlayerObject) continue;
+                            if (netObj.OwnerClientId == NetworkManager.ServerClientId) continue;
+                            clientPlayer = netObj;
+                            break;
+                        }
+                    }
+
+                    if (clientPlayer != null && ReadEquippedAbilityIndex(clientPlayer) == expectedClientAbility)
+                        break;
+
+                    yield return new WaitForSeconds(0.25f);
+                }
+
+                int actual = clientPlayer != null ? ReadEquippedAbilityIndex(clientPlayer) : -1;
+                bool ok = actual == expectedClientAbility;
+                Debug.Log($"[LanSmoke] Ability selection client expected={expectedClientAbility} actual={actual} ok={ok}");
+                if (!ok)
+                {
+                    Application.Quit(14);
+                    yield break;
+                }
+
+                if (expectedClientAbility == 2)
+                    yield return StartCoroutine(RunSelectedMineUseSmoke(clientPlayer));
+            }
+
+            private IEnumerator RunSelectedMineUseSmoke(NetworkObject player)
+            {
+                if (player == null)
+                {
+                    Debug.LogError("[LanSmoke] Mine use check failed: player missing");
+                    Application.Quit(15);
+                    yield break;
+                }
+
+                Component ability = player.GetComponent("AbilityController");
+                if (ability == null)
+                {
+                    Debug.LogError("[LanSmoke] Mine use check failed: AbilityController missing");
+                    Application.Quit(15);
+                    yield break;
+                }
+
+                Vector3 start = player.transform.position;
+                int minesBefore = CountMineObjects();
+                bool executed = InvokePublicBool(ability, "TryUseEquippedAbilityServer", Vector2.up);
+                yield return new WaitForSeconds(0.35f);
+                int minesAfter = CountMineObjects();
+                float moved = Vector2.Distance(start, player.transform.position);
+                bool ok = executed && minesAfter > minesBefore && moved < 0.35f;
+                Debug.Log($"[LanSmoke] Mine use selected executed={executed} mines={minesBefore}->{minesAfter} moved={moved:0.00} ok={ok}");
+                if (!ok)
+                    Application.Quit(15);
+            }
+
+            private static int ReadEquippedAbilityIndex(NetworkObject player)
+            {
+                if (player == null) return -1;
+                Component ability = player.GetComponent("AbilityController");
+                if (ability == null) return -1;
+                object netVar = ability.GetType().GetField("EquippedAbilityIndex")?.GetValue(ability);
+                object value = netVar?.GetType().GetProperty("Value")?.GetValue(netVar);
+                return value is int index ? index : -1;
+            }
+
             private static void InvokePublic(Component component, string methodName, params object[] args)
             {
                 if (component == null) return;
@@ -348,6 +434,14 @@ namespace FrentePartido.Networking
                 var method = component.GetType().GetMethod(methodName);
                 object result = method != null ? method.Invoke(component, args) : null;
                 return result is int value ? value : 0;
+            }
+
+            private static bool InvokePublicBool(Component component, string methodName, params object[] args)
+            {
+                if (component == null) return false;
+                var method = component.GetType().GetMethod(methodName);
+                object result = method != null ? method.Invoke(component, args) : null;
+                return result is bool value && value;
             }
 
             private static int CountMineObjects()

@@ -10,6 +10,7 @@ namespace FrentePartido.UI
         [SerializeField] private Image _cooldownOverlay;
         [SerializeField] private TMP_Text _cooldownText;
         private TMP_Text _labelText;
+        private Color _readyTint = Color.white;
 
         public void SetIcon(Sprite icon)
         {
@@ -21,7 +22,8 @@ namespace FrentePartido.UI
         /// reads at a glance even without a sprite asset assigned.</summary>
         public void ConfigureForAbility(string label, Color tint)
         {
-            if (_iconImage != null) _iconImage.color = tint;
+            _readyTint = tint;
+            if (_iconImage != null) _iconImage.color = _readyTint;
 
             if (_labelText == null)
             {
@@ -40,20 +42,29 @@ namespace FrentePartido.UI
                     _labelText.transform.SetSiblingIndex(_cooldownText.transform.GetSiblingIndex());
             }
             _labelText.text = label;
+            SetReady();
         }
 
         public void UpdateCooldown(float remaining, float total)
         {
+            if (_labelText != null)
+                _labelText.gameObject.SetActive(false);
+
+            if (_iconImage != null)
+                _iconImage.color = Color.Lerp(_readyTint, Color.black, 0.35f);
+
             if (_cooldownOverlay != null)
             {
                 _cooldownOverlay.gameObject.SetActive(true);
                 _cooldownOverlay.fillAmount = remaining / total;
+                _cooldownOverlay.color = new Color(0f, 0f, 0f, 0.58f);
             }
 
             if (_cooldownText != null)
             {
                 _cooldownText.gameObject.SetActive(true);
                 _cooldownText.text = Mathf.CeilToInt(remaining).ToString();
+                _cooldownText.color = Color.white;
             }
         }
 
@@ -67,6 +78,12 @@ namespace FrentePartido.UI
 
             if (_cooldownText != null)
                 _cooldownText.gameObject.SetActive(false);
+
+            if (_iconImage != null)
+                _iconImage.color = _readyTint;
+
+            if (_labelText != null)
+                _labelText.gameObject.SetActive(true);
         }
     }
 }

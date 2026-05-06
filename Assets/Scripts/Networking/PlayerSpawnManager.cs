@@ -133,6 +133,7 @@ namespace FrentePartido.Networking
             {
                 MoveNetworkPlayer(existing, worldPos);
                 _spawnedPlayers[clientId] = existing;
+                RespawnPlayerClientRpc(clientId, spawnPos);
                 Debug.Log($"[Spawn] Reused existing player for client {clientId} at {worldPos} | Faction: {faction}");
                 return;
             }
@@ -307,6 +308,7 @@ namespace FrentePartido.Networking
             var nm = NetworkManager.Singleton;
             if (nm == null || nm.SpawnManager == null) yield break;
 
+            bool found = false;
             for (int attempt = 0; attempt < 30; attempt++)
             {
                 foreach (var kv in nm.SpawnManager.SpawnedObjects)
@@ -322,13 +324,23 @@ namespace FrentePartido.Networking
                     if (presentation != null) presentation.ResetVisuals();
 
                     MoveNetworkPlayer(obj, new Vector3(position.x, position.y, 0f));
-                    yield break;
+                    found = true;
+                    break;
+                }
+
+                if (found)
+                {
+                    // Keep snapping briefly. Owner-authoritative NetworkTransform can
+                    // push the old prefab position (0,0) for a few frames after spawn.
+                    yield return new WaitForSeconds(0.05f);
+                    continue;
                 }
 
                 yield return new WaitForSeconds(0.05f);
             }
 
-            Debug.LogWarning($"[Spawn] Could not snap spawned player {clientId} after scene load.");
+            if (!found)
+                Debug.LogWarning($"[Spawn] Could not snap spawned player {clientId} after scene load.");
         }
     }
 }

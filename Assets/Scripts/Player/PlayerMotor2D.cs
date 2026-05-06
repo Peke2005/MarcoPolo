@@ -18,7 +18,7 @@ namespace FrentePartido.Player
         private Rigidbody2D _rb;
         private Collider2D _bodyCollider;
         private PlayerInputReader _input;
-        private bool _movementEnabled = true;
+        private bool _movementEnabled;
         private Vector2 _rawKeyboardDir;
         private Vector2 _serverMoveDir;
         private Vector2 _externalMoveDir;
@@ -54,7 +54,7 @@ namespace FrentePartido.Player
                 _rb.interpolation = RigidbodyInterpolation2D.None;
                 _rb.gravityScale = 0f; // Top-down, no gravity
                 _rb.freezeRotation = true;
-                _movementEnabled = true;
+                _movementEnabled = false;
                 if (_input != null) _input.IsInputEnabled = true;
             }
         }

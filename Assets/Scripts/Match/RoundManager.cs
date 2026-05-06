@@ -121,12 +121,13 @@ namespace FrentePartido.Match
             RoundTimer.Value = _balance.roundDuration;
             _roundActive = false;
 
+            EnablePlayersClientRpc(false);
             OnRoundStarting?.Invoke();
             AnnounceRoundClientRpc(MatchManager.Instance.CurrentRound.Value);
 
             ResetRoundState();
 
-            yield return new WaitForSeconds(_balance.roundIntroDuration);
+            yield return StartCoroutine(IntroLockAndSpawnSequence(_balance.roundIntroDuration));
 
             // Active phase
             State.Value = RoundState.Active;
@@ -235,6 +236,24 @@ namespace FrentePartido.Match
 
             ResetPlayerVisualsClientRpc();
             RebuildDecorClientRpc();
+        }
+
+        private IEnumerator IntroLockAndSpawnSequence(float duration)
+        {
+            var spawn = FindAnyObjectByType<Networking.PlayerSpawnManager>();
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                EnablePlayersClientRpc(false);
+                if (spawn != null) spawn.RespawnPlayers();
+
+                float step = Mathf.Min(0.25f, duration - elapsed);
+                elapsed += step;
+                yield return new WaitForSeconds(step);
+            }
+
+            EnablePlayersClientRpc(false);
+            if (spawn != null) spawn.RespawnPlayers();
         }
 
         [ClientRpc]

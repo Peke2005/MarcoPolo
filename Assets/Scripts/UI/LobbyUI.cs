@@ -166,7 +166,7 @@ namespace FrentePartido.UI
             var vl = main.gameObject.AddComponent<VerticalLayoutGroup>();
             vl.spacing = 16; vl.padding = new RectOffset(12, 12, 8, 8);
             vl.childForceExpandWidth = true; vl.childForceExpandHeight = false;
-            vl.childControlWidth = true; vl.childControlHeight = false;
+            vl.childControlWidth = true; vl.childControlHeight = true;
 
             BuildHeader(main.transform);
             BuildPlayers(main.transform);

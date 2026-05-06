@@ -60,15 +60,34 @@ namespace FrentePartido.Match
             if (!IsServer) return;
             if (_player1Health != null && _player2Health != null) return;
 
+            TryRegisterSpawnedPlayers();
+        }
+
+        public void RegisterPlayers(Player.PlayerHealth p1, ulong p1Id, Player.PlayerHealth p2, ulong p2Id)
+        {
+            if (_player1Health != null) _player1Health.OnPlayerDied -= HandlePlayerDied;
+            if (_player2Health != null) _player2Health.OnPlayerDied -= HandlePlayerDied;
+
+            _player1Health = p1;
+            _player1ClientId = p1Id;
+            _player2Health = p2;
+            _player2ClientId = p2Id;
+
+            _player1Health.OnPlayerDied += HandlePlayerDied;
+            _player2Health.OnPlayerDied += HandlePlayerDied;
+        }
+
+        private bool TryRegisterSpawnedPlayers()
+        {
             var gs = Networking.NetworkGameState.Instance;
-            if (gs == null) return;
+            if (gs == null) return false;
 
             ulong p1Id = gs.Player1ClientId.Value;
             ulong p2Id = gs.Player2ClientId.Value;
-            if (p1Id == ulong.MaxValue || p2Id == ulong.MaxValue) return;
+            if (p1Id == ulong.MaxValue || p2Id == ulong.MaxValue) return false;
 
             var nm = NetworkManager.Singleton;
-            if (nm == null || nm.SpawnManager == null) return;
+            if (nm == null || nm.SpawnManager == null) return false;
 
             Player.PlayerHealth h1 = null;
             Player.PlayerHealth h2 = null;
@@ -82,22 +101,11 @@ namespace FrentePartido.Match
                 else if (obj.OwnerClientId == p2Id) h2 = hp;
             }
 
-            if (h1 != null && h2 != null)
-            {
-                RegisterPlayers(h1, p1Id, h2, p2Id);
-                Debug.Log("[Round] Auto-registered both players.");
-            }
-        }
+            if (h1 == null || h2 == null) return false;
 
-        public void RegisterPlayers(Player.PlayerHealth p1, ulong p1Id, Player.PlayerHealth p2, ulong p2Id)
-        {
-            _player1Health = p1;
-            _player1ClientId = p1Id;
-            _player2Health = p2;
-            _player2ClientId = p2Id;
-
-            _player1Health.OnPlayerDied += HandlePlayerDied;
-            _player2Health.OnPlayerDied += HandlePlayerDied;
+            RegisterPlayers(h1, p1Id, h2, p2Id);
+            Debug.Log("[Round] Auto-registered both players.");
+            return true;
         }
 
         public void StartRound()
@@ -213,8 +221,8 @@ namespace FrentePartido.Match
 
         private void ResetRoundState()
         {
-            ResetPlayerForRound(_player1Health);
-            ResetPlayerForRound(_player2Health);
+            TryRegisterSpawnedPlayers();
+            ResetAllPlayersForRound();
 
             // Move them back to spawn points (without this they stay where they died).
             var spawn = FindAnyObjectByType<Networking.PlayerSpawnManager>();
@@ -251,6 +259,25 @@ namespace FrentePartido.Match
             // last round or who got killed before the cooldown wore off.
             var ability = health.GetComponent<Abilities.AbilityController>();
             if (ability != null) ability.ResetCooldown();
+        }
+
+        private void ResetAllPlayersForRound()
+        {
+            var nm = NetworkManager.Singleton;
+            if (nm == null || nm.SpawnManager == null)
+            {
+                ResetPlayerForRound(_player1Health);
+                ResetPlayerForRound(_player2Health);
+                return;
+            }
+
+            foreach (var kv in nm.SpawnManager.SpawnedObjects)
+            {
+                var obj = kv.Value;
+                if (obj == null || !obj.IsPlayerObject) continue;
+                var health = obj.GetComponent<Player.PlayerHealth>();
+                ResetPlayerForRound(health);
+            }
         }
 
         [ClientRpc]

@@ -455,12 +455,8 @@ namespace FrentePartido.UI
             BuildProfileStat(card.transform, "Losses", "DERROTAS", out _profileLossesText, 0.06f, 0.25f, 0.47f, 0.44f, RED);
             BuildProfileStat(card.transform, "WinRate", "WINRATE", out _profileWinRateText, 0.53f, 0.25f, 0.94f, 0.44f, ACCENT);
 
-            var note = Txt("ProfileNote", card.transform, "Stats guardadas en este PC. Sube al terminar cada partida.", 14, FontStyles.Normal, TXT2);
-            Anchors(note, 0.06f, 0.15f, 0.94f, 0.23f);
-            note.alignment = TextAlignmentOptions.Center;
-
             var closeBg = Panel("ProfileClose", card.transform, DANGER);
-            Anchors(closeBg, 0.34f, 0.04f, 0.66f, 0.13f);
+            Anchors(closeBg, 0.34f, 0.07f, 0.66f, 0.16f);
             var close = closeBg.gameObject.AddComponent<Button>();
             var closeTxt = Txt("ProfileCloseTxt", closeBg.transform, "CERRAR", 15, FontStyles.Bold, Color.white);
             Stretch(closeTxt);

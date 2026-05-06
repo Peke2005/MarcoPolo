@@ -44,9 +44,9 @@ namespace FrentePartido.UI
         [SerializeField] private TMP_Text _statusText;
         [SerializeField] private GameObject _loadingIndicator;
 
-        static readonly Color BG = C(0.035f, 0.055f, 0.050f);
-        static readonly Color PANEL = C(0.095f, 0.125f, 0.115f);
-        static readonly Color PANEL2 = C(0.130f, 0.165f, 0.145f);
+        static readonly Color BG = C(0.025f, 0.040f, 0.036f);
+        static readonly Color PANEL = C(0.085f, 0.115f, 0.103f);
+        static readonly Color PANEL2 = C(0.120f, 0.155f, 0.138f);
         static readonly Color GREEN = C(0.34f, 0.78f, 0.42f);
         static readonly Color GOLD = C(1.00f, 0.76f, 0.22f);
         static readonly Color BLUE = C(0.25f, 0.52f, 0.96f);
@@ -79,43 +79,53 @@ namespace FrentePartido.UI
             var bg = Panel("BG", transform, BG);
             Stretch(bg);
 
-            AddSoftGlow(bg.transform, "GlowLeft", new Vector2(-360f, 220f), new Vector2(520f, 520f), new Color(0.25f, 0.65f, 0.30f, 0.18f));
-            AddSoftGlow(bg.transform, "GlowRight", new Vector2(390f, -210f), new Vector2(620f, 620f), new Color(1.0f, 0.72f, 0.18f, 0.12f));
+            AddSoftGlow(bg.transform, "GlowLeft", new Vector2(-410f, 230f), new Vector2(620f, 620f), new Color(0.20f, 0.75f, 0.34f, 0.16f));
+            AddSoftGlow(bg.transform, "GlowRight", new Vector2(470f, -210f), new Vector2(760f, 620f), new Color(1.0f, 0.72f, 0.18f, 0.12f));
+            AddSoftGlow(bg.transform, "GlowBlue", new Vector2(120f, -360f), new Vector2(420f, 320f), new Color(0.20f, 0.48f, 1.0f, 0.07f));
 
             var shell = Panel("Shell", bg.transform, new Color(0f, 0f, 0f, 0f));
             Anchors(shell, 0.11f, 0.08f, 0.89f, 0.92f);
 
-            var title = Text("Title", shell.transform, "MARCO POLO", 64, FontStyles.Bold, TXT);
-            Anchors(title, 0f, 0.82f, 1f, 1f);
+            var title = Text("Title", shell.transform, "MARCO POLO", 66, FontStyles.Bold, TXT);
+            Anchors(title, 0f, 0.80f, 1f, 1f);
             title.alignment = TextAlignmentOptions.Left;
-            title.characterSpacing = 8f;
+            title.characterSpacing = 10f;
 
             // Accent bar under the title — adds visual weight without extra text.
             var accent = Panel("TitleAccent", shell.transform, GOLD);
-            Anchors(accent, 0f, 0.80f, 0.10f, 0.815f);
+            Anchors(accent, 0f, 0.775f, 0.12f, 0.792f);
 
             var subtitle = Text("Subtitle", shell.transform, "DUELO TACTICO ONLINE", 22, FontStyles.Bold, GOLD);
-            Anchors(subtitle, 0.115f, 0.795f, 1f, 0.84f);
+            Anchors(subtitle, 0.14f, 0.765f, 1f, 0.82f);
             subtitle.alignment = TextAlignmentOptions.Left;
             subtitle.characterSpacing = 8f;
 
+            var backPlate = Panel("BackPlate", shell.transform, new Color(0.07f, 0.16f, 0.10f, 0.62f));
+            Anchors(backPlate, 0.10f, 0.33f, 0.48f, 0.95f);
+
+            var rightPlate = Panel("RightPlate", shell.transform, new Color(0.42f, 0.31f, 0.08f, 0.35f));
+            Anchors(rightPlate, 0.54f, 0.00f, 0.98f, 0.52f);
+
             var card = Panel("MenuCard", shell.transform, PANEL);
-            Anchors(card, 0f, 0.03f, 0.58f, 0.68f);
+            Anchors(card, 0f, 0.04f, 0.55f, 0.66f);
+
+            var cardTop = Panel("MenuCardTop", card.transform, GOLD);
+            Anchors(cardTop, 0f, 0.985f, 1f, 1f);
 
             _profileText = Text("Profile", card.transform, "Nombre: Jugador", 16, FontStyles.Bold, TXT);
-            Anchors(_profileText, 0.08f, 0.82f, 0.62f, 0.93f);
+            Anchors(_profileText, 0.08f, 0.84f, 0.60f, 0.93f);
             _profileText.alignment = TextAlignmentOptions.Left;
 
-            _profileButton = MenuButton(card.transform, "ProfileButton", "PERFIL", GOLD, 0.68f, 0.82f, 0.92f, 0.93f);
+            _profileButton = MenuButton(card.transform, "ProfileButton", "PERFIL", GOLD, 0.69f, 0.84f, 0.92f, 0.94f);
 
-            var hint = Text("Hint", card.transform, "Crea sala, copia codigo y tu amigo entra desde Unity.", 12, FontStyles.Normal, MUTED);
-            Anchors(hint, 0.08f, 0.73f, 0.92f, 0.82f);
+            var hint = Text("Hint", card.transform, "Crea sala, copia codigo y juega online 1v1.", 13, FontStyles.Normal, MUTED);
+            Anchors(hint, 0.08f, 0.75f, 0.92f, 0.82f);
             hint.alignment = TextAlignmentOptions.Left;
 
-            _createGameButton = MenuButton(card.transform, "Create", "CREAR SALA", GREEN, 0.08f, 0.56f, 0.92f, 0.69f);
-            _joinGameButton = MenuButton(card.transform, "Join", "UNIRSE CON CODIGO", BLUE, 0.08f, 0.40f, 0.92f, 0.53f);
-            _optionsButton = MenuButton(card.transform, "Options", "AJUSTES", PANEL2, 0.08f, 0.24f, 0.92f, 0.37f);
-            _quitButton = MenuButton(card.transform, "Quit", "SALIR", RED, 0.08f, 0.08f, 0.92f, 0.21f);
+            _createGameButton = MenuButton(card.transform, "Create", "CREAR SALA", GREEN, 0.08f, 0.58f, 0.92f, 0.70f);
+            _joinGameButton = MenuButton(card.transform, "Join", "UNIRSE CON CODIGO", BLUE, 0.08f, 0.43f, 0.92f, 0.55f);
+            _optionsButton = MenuButton(card.transform, "Options", "AJUSTES", PANEL2, 0.08f, 0.28f, 0.92f, 0.40f);
+            _quitButton = MenuButton(card.transform, "Quit", "SALIR", RED, 0.08f, 0.13f, 0.92f, 0.25f);
 
             BuildJoinPanel(shell.transform);
             BuildOptionsPanel(shell.transform);
@@ -131,7 +141,7 @@ namespace FrentePartido.UI
             _profilePanelRoot = overlay.gameObject;
 
             var card = Panel("ProfileCard", overlay.transform, PANEL);
-            Anchors(card, 0.16f, 0.12f, 0.84f, 0.88f);
+            Anchors(card, 0.18f, 0.15f, 0.82f, 0.88f);
 
             var accent = Panel("ProfileAccent", card.transform, GOLD);
             Anchors(accent, 0f, 0.94f, 1f, 1f);
@@ -154,16 +164,12 @@ namespace FrentePartido.UI
             Anchors(_profileRankValue, 0.08f, 0.08f, 0.92f, 0.62f);
             _profileRankValue.alignment = TextAlignmentOptions.Left;
 
-            BuildProfileStat(card.transform, "Matches", "PARTIDAS", out _profileMatchesValue, 0.06f, 0.47f, 0.47f, 0.66f, BLUE);
-            BuildProfileStat(card.transform, "Wins", "VICTORIAS", out _profileWinsValue, 0.53f, 0.47f, 0.94f, 0.66f, GREEN);
-            BuildProfileStat(card.transform, "Losses", "DERROTAS", out _profileLossesValue, 0.06f, 0.24f, 0.47f, 0.43f, RED);
-            BuildProfileStat(card.transform, "WinRate", "WINRATE", out _profileWinRateValue, 0.53f, 0.24f, 0.94f, 0.43f, GOLD);
+            BuildProfileStat(card.transform, "Matches", "PARTIDAS", out _profileMatchesValue, 0.06f, 0.45f, 0.47f, 0.65f, BLUE);
+            BuildProfileStat(card.transform, "Wins", "VICTORIAS", out _profileWinsValue, 0.53f, 0.45f, 0.94f, 0.65f, GREEN);
+            BuildProfileStat(card.transform, "Losses", "DERROTAS", out _profileLossesValue, 0.06f, 0.22f, 0.47f, 0.42f, RED);
+            BuildProfileStat(card.transform, "WinRate", "WINRATE", out _profileWinRateValue, 0.53f, 0.22f, 0.94f, 0.42f, GOLD);
 
-            var note = Text("ProfileNote", card.transform, "Stats guardadas en este PC al acabar cada partida.", 14, FontStyles.Normal, MUTED);
-            Anchors(note, 0.06f, 0.14f, 0.94f, 0.22f);
-            note.alignment = TextAlignmentOptions.Center;
-
-            var close = MenuButton(card.transform, "CloseProfile", "CERRAR", RED, 0.34f, 0.04f, 0.66f, 0.13f);
+            var close = MenuButton(card.transform, "CloseProfile", "CERRAR", RED, 0.34f, 0.06f, 0.66f, 0.16f);
             close.onClick.AddListener(HideProfilePanel);
             HideProfilePanel();
         }

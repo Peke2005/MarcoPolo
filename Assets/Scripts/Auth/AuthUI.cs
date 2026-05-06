@@ -179,9 +179,11 @@ namespace FrentePartido.Auth
             {
                 ShowSuccess(message);
 
-                if (!string.IsNullOrEmpty(AuthService.DisplayName))
+                string playerName = ResolvePlayerName();
+                if (!string.IsNullOrWhiteSpace(playerName))
                 {
-                    GameConfig.Preferences.playerName = AuthService.DisplayName;
+                    GameConfig.Preferences.playerName = playerName;
+                    PlayerPrefs.SetString("auth_username", playerName);
                 }
 
                 GameConfig.Save();
@@ -193,6 +195,15 @@ namespace FrentePartido.Auth
                 SetLoading(false);
                 ShowError($"No se pudo abrir el menu principal: {e.Message}");
             }
+        }
+
+        private static string ResolvePlayerName()
+        {
+            if (!string.IsNullOrWhiteSpace(AuthService.Username))
+                return AuthService.Username;
+            if (!string.IsNullOrWhiteSpace(AuthService.DisplayName))
+                return AuthService.DisplayName;
+            return GameConfig.Preferences?.playerName ?? "Jugador";
         }
 
         private void ShowLogin()

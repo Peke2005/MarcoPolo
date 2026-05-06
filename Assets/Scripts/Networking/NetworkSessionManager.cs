@@ -189,12 +189,12 @@ namespace FrentePartido.Networking
                 }
 
                 // 1. Relay allocation
-                var (joinCode, _) = await RelayConnectionManager.CreateRelayAllocation(2);
+                var (joinCode, _) = await RelayConnectionManager.CreateRelayAllocation(10);
                 JoinCode = joinCode;
 
                 // 2. Lobby creation with relay join code
                 string lobbyName = $"{GameConfig.Preferences.playerName}'s Match";
-                await LobbyManager.CreateLobby(lobbyName, joinCode, 2);
+                await LobbyManager.CreateLobby(lobbyName, joinCode, 10);
 
                 // 3. Start host
                 if (!_networkManager.StartHost())
@@ -494,6 +494,7 @@ namespace FrentePartido.Networking
         {
             reader.ReadValueSafe(out byte mode);
             SelectedGameMode = (GameMode)Mathf.Clamp(mode, 0, 1);
+            RuntimeMatchSettings.ApplyMode(SelectedGameMode);
 
             reader.ReadValueSafe(out int count);
             _lobbyPlayers.Clear();
@@ -531,6 +532,7 @@ namespace FrentePartido.Networking
         {
             if (!IsHost) return;
             SelectedGameMode = mode;
+            RuntimeMatchSettings.ApplyMode(mode);
             BroadcastLobbyState();
         }
 

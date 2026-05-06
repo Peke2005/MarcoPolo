@@ -12,7 +12,8 @@
         "FrentePartido.Pickups",
         "Unity.Netcode.Runtime",
         "Unity.TextMeshPro",
-        "Unity.InputSystem"
+        "Unity.InputSystem",
+        "Unity.Collections"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

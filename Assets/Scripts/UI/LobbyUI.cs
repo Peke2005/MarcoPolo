@@ -234,7 +234,7 @@ namespace FrentePartido.UI
         {
             var section = LayoutRow("Players", p, 165);
 
-            var label = Txt("PLabel", section.transform, "JUGADORES", 10, FontStyles.Bold, MUTED);
+            var label = Txt("PLabel", section.transform, "JUGADORES (1V1: 2 | DEATHMATCH: 2-10)", 10, FontStyles.Bold, MUTED);
             Anchors(label, 0, 0.9f, 1, 1); label.alignment = TextAlignmentOptions.BottomLeft;
 
             var cards = Panel("Cards", section.transform, Color.clear);
@@ -670,7 +670,7 @@ namespace FrentePartido.UI
             if (_modeInfoText != null)
             {
                 _modeInfoText.text = mode == GameMode.Deathmatch
-                    ? "DEATHMATCH: 10 minutos, 20 kills."
+                    ? "DEATHMATCH: 2-10 jugadores, 10 min, 20 kills."
                     : "1V1: mejor de 5 rondas.";
             }
 
@@ -725,6 +725,8 @@ namespace FrentePartido.UI
             var players = session != null
                 ? session.GetLobbyPlayers()
                 : System.Array.Empty<NetworkSessionManager.LobbyPlayerInfo>();
+            if (_modeInfoText != null && _selectedMode == GameMode.Deathmatch)
+                _modeInfoText.text = $"DEATHMATCH: {players.Count}/10 jugadores - 10 min - 20 kills.";
             bool hasP2 = players.Count >= 2;
 
             string p1Name = players.Count > 0 ? players[0].PlayerName : (GameConfig.Preferences.playerName ?? "Jugador 1");
@@ -757,7 +759,12 @@ namespace FrentePartido.UI
             bool hasNet = Unity.Netcode.NetworkManager.Singleton != null &&
                           Unity.Netcode.NetworkManager.Singleton.IsListening;
             var session = NetworkSessionManager.Instance;
-            bool canStart = hasNet && session != null && session.IsHost && session.AreLobbyPlayersReady();
+            int playerCount = session != null ? session.GetLobbyPlayers().Count : 0;
+            int expected = _selectedMode == GameMode.Deathmatch ? Mathf.Clamp(playerCount, 2, 10) : 2;
+            bool validCount = _selectedMode == GameMode.Deathmatch
+                ? playerCount >= 2 && playerCount <= 10
+                : playerCount == 2;
+            bool canStart = hasNet && session != null && session.IsHost && validCount && session.AreLobbyPlayersReady(expected);
             _startGameButton.interactable = canStart;
         }
 

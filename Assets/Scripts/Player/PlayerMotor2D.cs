@@ -177,8 +177,10 @@ namespace FrentePartido.Player
             if (mapDefinition != null)
             {
                 Vector2 clampedPos = currentPos + delta;
-                clampedPos.x = Mathf.Clamp(clampedPos.x, mapDefinition.boundsMin.x, mapDefinition.boundsMax.x);
-                clampedPos.y = Mathf.Clamp(clampedPos.y, mapDefinition.boundsMin.y, mapDefinition.boundsMax.y);
+                Vector2 min = RuntimeMatchSettings.Mode == GameMode.Deathmatch ? RuntimeMatchSettings.BoundsMin : mapDefinition.boundsMin;
+                Vector2 max = RuntimeMatchSettings.Mode == GameMode.Deathmatch ? RuntimeMatchSettings.BoundsMax : mapDefinition.boundsMax;
+                clampedPos.x = Mathf.Clamp(clampedPos.x, min.x, max.x);
+                clampedPos.y = Mathf.Clamp(clampedPos.y, min.y, max.y);
                 delta = clampedPos - currentPos;
             }
 
@@ -287,3 +289,4 @@ namespace FrentePartido.Player
         }
     }
 }
+

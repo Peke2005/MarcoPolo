@@ -1,3 +1,5 @@
+using UnityEngine;
+
 namespace FrentePartido.Data
 {
     public enum MatchState : byte
@@ -55,5 +57,27 @@ namespace FrentePartido.Data
     {
         Blue,
         Red
+    }
+
+    public static class RuntimeMatchSettings
+    {
+        public static GameMode Mode = GameMode.Rounds1v1;
+        public static Vector2 BoundsMin = new Vector2(-12f, -7f);
+        public static Vector2 BoundsMax = new Vector2(12f, 7f);
+
+        public static void ApplyMode(GameMode mode)
+        {
+            Mode = mode;
+            if (mode == GameMode.Deathmatch)
+            {
+                BoundsMin = new Vector2(-22f, -13f);
+                BoundsMax = new Vector2(22f, 13f);
+            }
+            else
+            {
+                BoundsMin = new Vector2(-12f, -7f);
+                BoundsMax = new Vector2(12f, 7f);
+            }
+        }
     }
 }

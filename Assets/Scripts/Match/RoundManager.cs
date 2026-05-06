@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 using FrentePartido.Data;
@@ -33,6 +34,7 @@ namespace FrentePartido.Match
         private bool _roundActive;
         private Action<ulong> _player1DeathHandler;
         private Action<ulong> _player2DeathHandler;
+        private readonly Dictionary<ulong, Action<ulong>> _deathmatchDeathHandlers = new();
 
         private void Awake()
         {
@@ -60,6 +62,11 @@ namespace FrentePartido.Match
             // is not called from anywhere else, so without this round end / death
             // detection never fires.
             if (!IsServer) return;
+            if (MatchManager.Instance != null && MatchManager.Instance.IsDeathmatch)
+            {
+                RegisterDeathmatchPlayers();
+                return;
+            }
             if (_player1Health != null && _player2Health != null) return;
 
             TryRegisterSpawnedPlayers();
@@ -110,6 +117,27 @@ namespace FrentePartido.Match
             RegisterPlayers(h1, p1Id, h2, p2Id);
             Debug.Log("[Round] Auto-registered both players.");
             return true;
+        }
+
+        private void RegisterDeathmatchPlayers()
+        {
+            var nm = NetworkManager.Singleton;
+            if (nm == null || nm.SpawnManager == null) return;
+
+            foreach (var kv in nm.SpawnManager.SpawnedObjects)
+            {
+                var obj = kv.Value;
+                if (obj == null || !obj.IsPlayerObject) continue;
+                ulong clientId = obj.OwnerClientId;
+                if (_deathmatchDeathHandlers.ContainsKey(clientId)) continue;
+
+                var hp = obj.GetComponent<Player.PlayerHealth>();
+                if (hp == null) continue;
+
+                Action<ulong> handler = killer => HandlePlayerDied(clientId, killer);
+                _deathmatchDeathHandlers[clientId] = handler;
+                hp.OnPlayerDied += handler;
+            }
         }
 
         public void StartRound()
@@ -228,6 +256,7 @@ namespace FrentePartido.Match
             OnRoundStarting?.Invoke();
             AnnounceDeathmatchClientRpc();
             ResetRoundState();
+            RegisterDeathmatchPlayers();
 
             float intro = _balance != null ? _balance.roundIntroDuration : 3f;
             yield return StartCoroutine(IntroLockAndSpawnSequence(intro));

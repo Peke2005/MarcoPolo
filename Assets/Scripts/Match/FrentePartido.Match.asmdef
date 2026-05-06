@@ -9,7 +9,8 @@
         "FrentePartido.Abilities",
         "FrentePartido.Combat",
         "FrentePartido.Pickups",
-        "Unity.Netcode.Runtime"
+        "Unity.Netcode.Runtime",
+        "Unity.Collections"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

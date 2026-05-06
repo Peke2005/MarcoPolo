@@ -1,4 +1,5 @@
 using System;
+using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 using FrentePartido.Data;
@@ -6,6 +7,24 @@ using FrentePartido.Core;
 
 namespace FrentePartido.Match
 {
+    public struct DeathmatchScoreData : INetworkSerializable, IEquatable<DeathmatchScoreData>
+    {
+        public ulong ClientId;
+        public FixedString64Bytes PlayerName;
+        public byte Kills;
+
+        public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
+        {
+            serializer.SerializeValue(ref ClientId);
+            serializer.SerializeValue(ref PlayerName);
+            serializer.SerializeValue(ref Kills);
+        }
+
+        public bool Equals(DeathmatchScoreData other) => ClientId == other.ClientId;
+        public override bool Equals(object obj) => obj is DeathmatchScoreData other && Equals(other);
+        public override int GetHashCode() => ClientId.GetHashCode();
+    }
+
     public class MatchManager : NetworkBehaviour
     {
         public static MatchManager Instance { get; private set; }
@@ -25,8 +44,10 @@ namespace FrentePartido.Match
         public event Action<ulong> OnMatchWon;
         public event Action OnMatchStarted;
         public event Action OnRematchRequested;
+        public event Action OnDeathmatchScoresChanged;
 
         private RoundManager _roundManager;
+        public NetworkList<DeathmatchScoreData> DeathmatchScores { get; private set; }
         public bool IsDeathmatch => CurrentGameMode.Value == GameMode.Deathmatch;
 
         private void Awake()
@@ -34,6 +55,7 @@ namespace FrentePartido.Match
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             _roundManager = GetComponent<RoundManager>();
+            DeathmatchScores = new NetworkList<DeathmatchScoreData>();
         }
 
         public override void OnDestroy()
@@ -48,6 +70,7 @@ namespace FrentePartido.Match
             Player2Score.OnValueChanged += (_, _) => OnScoreChanged?.Invoke(Player1Score.Value, Player2Score.Value);
             Player1Kills.OnValueChanged += (_, _) => OnKillsChanged?.Invoke(Player1Kills.Value, Player2Kills.Value);
             Player2Kills.OnValueChanged += (_, _) => OnKillsChanged?.Invoke(Player1Kills.Value, Player2Kills.Value);
+            DeathmatchScores.OnListChanged += _ => OnDeathmatchScoresChanged?.Invoke();
 
             if (IsServer && _roundManager != null)
             {
@@ -93,10 +116,15 @@ namespace FrentePartido.Match
             Player2Score.Value = 0;
             Player1Kills.Value = 0;
             Player2Kills.Value = 0;
+            DeathmatchScores.Clear();
             CurrentRound.Value = 0;
             CurrentGameMode.Value = Networking.NetworkSessionManager.Instance != null
                 ? Networking.NetworkSessionManager.Instance.SelectedGameMode
                 : GameMode.Rounds1v1;
+            RuntimeMatchSettings.ApplyMode(CurrentGameMode.Value);
+
+            if (CurrentGameMode.Value == GameMode.Deathmatch)
+                InitializeDeathmatchScores();
             State.Value = MatchState.InProgress;
 
             OnMatchStarted?.Invoke();
@@ -175,20 +203,18 @@ namespace FrentePartido.Match
             var netState = Networking.NetworkGameState.Instance;
             if (netState == null) return false;
 
+            AddDeathmatchKill(killerClientId);
+            byte killerKills = GetDeathmatchKills(killerClientId);
+
             if (killerClientId == netState.Player1ClientId.Value)
-                Player1Kills.Value = (byte)Mathf.Min(Player1Kills.Value + 1, 255);
+                Player1Kills.Value = killerKills;
             else if (killerClientId == netState.Player2ClientId.Value)
-                Player2Kills.Value = (byte)Mathf.Min(Player2Kills.Value + 1, 255);
+                Player2Kills.Value = killerKills;
 
             int targetKills = _balance != null ? _balance.deathmatchKillsToWin : 20;
-            if (Player1Kills.Value >= targetKills)
+            if (killerKills >= targetKills)
             {
-                EndMatch(netState.Player1ClientId.Value);
-                return true;
-            }
-            if (Player2Kills.Value >= targetKills)
-            {
-                EndMatch(netState.Player2ClientId.Value);
+                EndMatch(killerClientId);
                 return true;
             }
 
@@ -202,10 +228,89 @@ namespace FrentePartido.Match
             var netState = Networking.NetworkGameState.Instance;
             if (netState == null) return;
 
-            ulong winner = Player2Kills.Value > Player1Kills.Value
-                ? netState.Player2ClientId.Value
-                : netState.Player1ClientId.Value;
+            ulong winner = ResolveDeathmatchLeader();
+            if (winner == ulong.MaxValue)
+            {
+                winner = Player2Kills.Value > Player1Kills.Value
+                    ? netState.Player2ClientId.Value
+                    : netState.Player1ClientId.Value;
+            }
             EndMatch(winner);
+        }
+
+        private void InitializeDeathmatchScores()
+        {
+            var nm = NetworkManager.Singleton;
+            if (nm == null) return;
+
+            foreach (ulong clientId in nm.ConnectedClientsIds)
+            {
+                EnsureDeathmatchScore(clientId);
+            }
+        }
+
+        private void EnsureDeathmatchScore(ulong clientId)
+        {
+            for (int i = 0; i < DeathmatchScores.Count; i++)
+                if (DeathmatchScores[i].ClientId == clientId)
+                    return;
+
+            string playerName = $"Jugador {clientId + 1}";
+            var session = Networking.NetworkSessionManager.Instance;
+            if (session != null)
+            {
+                foreach (var player in session.GetLobbyPlayers())
+                {
+                    if (player.ClientId == clientId)
+                    {
+                        playerName = player.PlayerName;
+                        break;
+                    }
+                }
+            }
+
+            DeathmatchScores.Add(new DeathmatchScoreData
+            {
+                ClientId = clientId,
+                PlayerName = new FixedString64Bytes(playerName),
+                Kills = 0
+            });
+        }
+
+        private void AddDeathmatchKill(ulong killerClientId)
+        {
+            EnsureDeathmatchScore(killerClientId);
+            for (int i = 0; i < DeathmatchScores.Count; i++)
+            {
+                if (DeathmatchScores[i].ClientId != killerClientId) continue;
+                var row = DeathmatchScores[i];
+                row.Kills = (byte)Mathf.Min(row.Kills + 1, 255);
+                DeathmatchScores[i] = row;
+                return;
+            }
+        }
+
+        private byte GetDeathmatchKills(ulong clientId)
+        {
+            for (int i = 0; i < DeathmatchScores.Count; i++)
+                if (DeathmatchScores[i].ClientId == clientId)
+                    return DeathmatchScores[i].Kills;
+            return 0;
+        }
+
+        private ulong ResolveDeathmatchLeader()
+        {
+            ulong winner = ulong.MaxValue;
+            byte best = 0;
+            for (int i = 0; i < DeathmatchScores.Count; i++)
+            {
+                if (winner == ulong.MaxValue || DeathmatchScores[i].Kills > best)
+                {
+                    winner = DeathmatchScores[i].ClientId;
+                    best = DeathmatchScores[i].Kills;
+                }
+            }
+            return winner;
         }
     }
 }

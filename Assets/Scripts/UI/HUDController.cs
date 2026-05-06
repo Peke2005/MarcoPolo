@@ -116,6 +116,7 @@ namespace FrentePartido.UI
             {
                 MatchManager.Instance.OnScoreChanged += UpdateScore;
                 MatchManager.Instance.OnKillsChanged += UpdateKills;
+                MatchManager.Instance.OnDeathmatchScoresChanged += UpdateDeathmatchScoreboard;
                 MatchManager.Instance.OnMatchWon += HandleMatchWon;
             }
             if (RoundManager.Instance != null)
@@ -133,6 +134,7 @@ namespace FrentePartido.UI
             {
                 MatchManager.Instance.OnScoreChanged -= UpdateScore;
                 MatchManager.Instance.OnKillsChanged -= UpdateKills;
+                MatchManager.Instance.OnDeathmatchScoresChanged -= UpdateDeathmatchScoreboard;
                 MatchManager.Instance.OnMatchWon -= HandleMatchWon;
             }
             if (RoundManager.Instance != null)
@@ -193,6 +195,14 @@ namespace FrentePartido.UI
 
         private static string ResolveFactionLabel(ulong clientId)
         {
+            if (MatchManager.Instance != null && MatchManager.Instance.IsDeathmatch && MatchManager.Instance.DeathmatchScores != null)
+            {
+                var scores = MatchManager.Instance.DeathmatchScores;
+                for (int i = 0; i < scores.Count; i++)
+                    if (scores[i].ClientId == clientId)
+                        return scores[i].PlayerName.ToString().ToUpperInvariant();
+            }
+
             var gs = FrentePartido.Networking.NetworkGameState.Instance;
             if (gs == null) return "?";
             if (clientId == gs.Player1ClientId.Value) return "AZUL";
@@ -416,6 +426,7 @@ namespace FrentePartido.UI
             {
                 UpdateScore(MatchManager.Instance.Player1Score.Value, MatchManager.Instance.Player2Score.Value);
                 UpdateKills(MatchManager.Instance.Player1Kills.Value, MatchManager.Instance.Player2Kills.Value);
+                UpdateDeathmatchScoreboard();
             }
 
             ConfigureAbilityIcon(ability);
@@ -489,7 +500,31 @@ namespace FrentePartido.UI
         private void UpdateKills(byte p1, byte p2)
         {
             if (MatchManager.Instance == null || !MatchManager.Instance.IsDeathmatch) return;
-            if (_roundScoreText != null) _roundScoreText.text = $"KILLS {p1} - {p2}";
+            UpdateDeathmatchScoreboard();
+        }
+
+        private void UpdateDeathmatchScoreboard()
+        {
+            if (_roundScoreText == null || MatchManager.Instance == null || !MatchManager.Instance.IsDeathmatch)
+                return;
+
+            var scores = MatchManager.Instance.DeathmatchScores;
+            if (scores == null || scores.Count == 0)
+            {
+                _roundScoreText.text = "KILLS 0";
+                return;
+            }
+
+            var rows = new System.Collections.Generic.List<DeathmatchScoreData>();
+            for (int i = 0; i < scores.Count; i++)
+                rows.Add(scores[i]);
+            rows.Sort((a, b) => b.Kills.CompareTo(a.Kills));
+
+            int limit = Mathf.Min(5, rows.Count);
+            System.Text.StringBuilder sb = new System.Text.StringBuilder("DEATHMATCH\n");
+            for (int i = 0; i < limit; i++)
+                sb.Append(rows[i].PlayerName).Append("  ").Append(rows[i].Kills).Append('\n');
+            _roundScoreText.text = sb.ToString().TrimEnd();
         }
 
         private void UpdateBeaconState(BeaconState state)

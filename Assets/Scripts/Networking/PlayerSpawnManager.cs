@@ -21,12 +21,18 @@ namespace FrentePartido.Networking
         private readonly Dictionary<ulong, NetworkObject> _spawnedPlayers = new Dictionary<ulong, NetworkObject>();
         private readonly List<ulong> _joinOrder = new List<ulong>();
         private NetworkGameState _gameState;
+        private static Sprite _solidSprite;
 
         public GameObject PlayerPrefab => _playerPrefab;
 
         public override void OnNetworkSpawn()
         {
             if (!IsServer) return;
+            RuntimeMatchSettings.ApplyMode(NetworkSessionManager.Instance != null
+                ? NetworkSessionManager.Instance.SelectedGameMode
+                : GameMode.Rounds1v1);
+            if (IsDeathmatchMode())
+                BuildDeathmatchArenaClientRpc();
 
             _gameState = GetComponent<NetworkGameState>();
             if (_gameState == null)
@@ -116,7 +122,12 @@ namespace FrentePartido.Networking
             Vector2 spawnPos;
             PlayerFaction faction;
 
-            if (slotIndex == 0)
+            if (IsDeathmatchMode())
+            {
+                spawnPos = GetDeathmatchSpawn(slotIndex);
+                faction = slotIndex % 2 == 0 ? PlayerFaction.Blue : PlayerFaction.Red;
+            }
+            else if (slotIndex == 0)
             {
                 spawnPos = _mapDefinition.spawnPointA;
                 faction = PlayerFaction.Blue;
@@ -235,9 +246,9 @@ namespace FrentePartido.Networking
                 if (netObj == null || !netObj.IsSpawned) continue;
 
                 int slotIndex = _joinOrder.IndexOf(clientId);
-                Vector2 spawnPos = slotIndex == 0
-                    ? _mapDefinition.spawnPointA
-                    : _mapDefinition.spawnPointB;
+                Vector2 spawnPos = IsDeathmatchMode()
+                    ? GetDeathmatchSpawn(slotIndex)
+                    : (slotIndex == 0 ? _mapDefinition.spawnPointA : _mapDefinition.spawnPointB);
 
                 MoveNetworkPlayer(netObj, new Vector3(spawnPos.x, spawnPos.y, 0f));
 
@@ -259,9 +270,9 @@ namespace FrentePartido.Networking
             if (netObj == null || !netObj.IsSpawned) return;
 
             int slotIndex = _joinOrder.IndexOf(clientId);
-            Vector2 spawnPos = slotIndex == 0
-                ? _mapDefinition.spawnPointA
-                : _mapDefinition.spawnPointB;
+            Vector2 spawnPos = IsDeathmatchMode()
+                ? GetDeathmatchSpawn(slotIndex)
+                : (slotIndex == 0 ? _mapDefinition.spawnPointA : _mapDefinition.spawnPointB);
 
             MoveNetworkPlayer(netObj, new Vector3(spawnPos.x, spawnPos.y, 0f));
 
@@ -293,6 +304,101 @@ namespace FrentePartido.Networking
         {
             int slot = _joinOrder.IndexOf(clientId);
             return slot == 0 ? PlayerFaction.Blue : PlayerFaction.Red;
+        }
+
+        private bool IsDeathmatchMode()
+        {
+            return NetworkSessionManager.Instance != null &&
+                   NetworkSessionManager.Instance.SelectedGameMode == GameMode.Deathmatch;
+        }
+
+        private static Vector2 GetDeathmatchSpawn(int slotIndex)
+        {
+            int slot = Mathf.Max(0, slotIndex);
+            float angle = (Mathf.PI * 2f * slot) / 10f;
+            return new Vector2(Mathf.Cos(angle) * 16.5f, Mathf.Sin(angle) * 9.0f);
+        }
+
+        [ClientRpc]
+        private void BuildDeathmatchArenaClientRpc()
+        {
+            RuntimeMatchSettings.ApplyMode(GameMode.Deathmatch);
+            BuildDeathmatchArena();
+        }
+
+        private static void BuildDeathmatchArena()
+        {
+            DestroyIfExists("~ArenaDecor");
+            DestroyIfExists("~ArenaAccents");
+            DestroyIfExists("~DeathmatchArena");
+
+            var root = new GameObject("~DeathmatchArena");
+            AddPiece(root, "Floor", Vector2.zero, new Vector2(44f, 26f), new Color(0.22f, 0.37f, 0.23f, 1f), false, -100);
+            AddPiece(root, "Wall_Top", new Vector2(0f, 13.3f), new Vector2(44f, 0.7f), new Color(0.55f, 0.34f, 0.16f, 1f), true, 5);
+            AddPiece(root, "Wall_Bottom", new Vector2(0f, -13.3f), new Vector2(44f, 0.7f), new Color(0.55f, 0.34f, 0.16f, 1f), true, 5);
+            AddPiece(root, "Wall_Left", new Vector2(-22.3f, 0f), new Vector2(0.7f, 26f), new Color(0.55f, 0.34f, 0.16f, 1f), true, 5);
+            AddPiece(root, "Wall_Right", new Vector2(22.3f, 0f), new Vector2(0.7f, 26f), new Color(0.55f, 0.34f, 0.16f, 1f), true, 5);
+
+            for (int i = 0; i < 10; i++)
+            {
+                Vector2 p = GetDeathmatchSpawn(i);
+                AddPiece(root, "DM_Spawn_" + i, p, new Vector2(1.7f, 1.7f),
+                    i % 2 == 0 ? new Color(0.2f, 0.55f, 1f, 0.55f) : new Color(1f, 0.3f, 0.25f, 0.55f),
+                    false, -50);
+            }
+
+            Vector2[] cover =
+            {
+                new Vector2(-12f, 6f), new Vector2(-6f, 0f), new Vector2(-12f, -6f),
+                new Vector2(12f, 6f), new Vector2(6f, 0f), new Vector2(12f, -6f),
+                new Vector2(0f, 8f), new Vector2(0f, -8f), new Vector2(-3f, 4f), new Vector2(3f, -4f)
+            };
+            for (int i = 0; i < cover.Length; i++)
+            {
+                AddPiece(root, "Decor_Crate_DM_" + i, cover[i],
+                    i % 3 == 0 ? new Vector2(3.2f, 0.9f) : new Vector2(1.2f, 2.4f),
+                    new Color(0.50f, 0.27f, 0.12f, 1f), true, 8);
+            }
+
+            Camera cam = Camera.main;
+            if (cam != null)
+                cam.orthographicSize = 7.2f;
+        }
+
+        private static void DestroyIfExists(string name)
+        {
+            var go = GameObject.Find(name);
+            if (go != null) Destroy(go);
+        }
+
+        private static void AddPiece(GameObject root, string name, Vector2 pos, Vector2 size, Color color, bool collider, int sorting)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(root.transform, false);
+            go.transform.position = new Vector3(pos.x, pos.y, 0f);
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = GetSolidSprite();
+            sr.color = color;
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.size = size;
+            sr.sortingOrder = sorting;
+            if (collider)
+            {
+                var box = go.AddComponent<BoxCollider2D>();
+                box.size = size;
+            }
+        }
+
+        private static Sprite GetSolidSprite()
+        {
+            if (_solidSprite != null) return _solidSprite;
+            var tex = new Texture2D(4, 4, TextureFormat.RGBA32, false);
+            var px = new Color[16];
+            for (int i = 0; i < px.Length; i++) px[i] = Color.white;
+            tex.SetPixels(px);
+            tex.Apply();
+            _solidSprite = Sprite.Create(tex, new Rect(0, 0, 4, 4), new Vector2(0.5f, 0.5f), 4f);
+            return _solidSprite;
         }
 
         // ── Client RPCs ─────────────────────────────────────────────

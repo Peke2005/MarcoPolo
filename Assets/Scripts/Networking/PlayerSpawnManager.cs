@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
@@ -298,24 +299,36 @@ namespace FrentePartido.Networking
         [ClientRpc]
         private void RespawnPlayerClientRpc(ulong clientId, Vector2 position)
         {
+            StartCoroutine(SnapPlayerWhenSpawned(clientId, position));
+        }
+
+        private IEnumerator SnapPlayerWhenSpawned(ulong clientId, Vector2 position)
+        {
             var nm = NetworkManager.Singleton;
-            if (nm == null || nm.SpawnManager == null) return;
+            if (nm == null || nm.SpawnManager == null) yield break;
 
-            foreach (var kv in nm.SpawnManager.SpawnedObjects)
+            for (int attempt = 0; attempt < 30; attempt++)
             {
-                NetworkObject obj = kv.Value;
-                if (obj == null || !obj.IsPlayerObject) continue;
-                if (obj.OwnerClientId != clientId) continue;
+                foreach (var kv in nm.SpawnManager.SpawnedObjects)
+                {
+                    NetworkObject obj = kv.Value;
+                    if (obj == null || !obj.IsPlayerObject) continue;
+                    if (obj.OwnerClientId != clientId) continue;
 
-                // Restore visuals on every client so the dead sprite/weapon come back.
-                var presentation = obj.GetComponent<PlayerPresentation>();
-                if (presentation != null) presentation.ResetVisuals();
+                    // Restore visuals and snap on every client. The first ClientRpc
+                    // can arrive before the spawned player exists locally, so this
+                    // coroutine retries during scene load.
+                    var presentation = obj.GetComponent<PlayerPresentation>();
+                    if (presentation != null) presentation.ResetVisuals();
 
-                // Owner also snaps position locally (NetworkTransform may lag a frame).
-                if (clientId == nm.LocalClientId)
-                    obj.transform.position = new Vector3(position.x, position.y, 0f);
-                break;
+                    MoveNetworkPlayer(obj, new Vector3(position.x, position.y, 0f));
+                    yield break;
+                }
+
+                yield return new WaitForSeconds(0.05f);
             }
+
+            Debug.LogWarning($"[Spawn] Could not snap spawned player {clientId} after scene load.");
         }
     }
 }

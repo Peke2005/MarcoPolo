@@ -18,11 +18,8 @@ namespace FrentePartido.Core
     {
         private const string PREFS_KEY = "FP_PlayerPrefs";
         public const string AUTH_URL_PREFS_KEY = "FP_AuthBaseUrl";
-        public const string DEFAULT_AUTH_BASE_URL = "http://26.234.30.190:3001";
-        public static readonly string[] FALLBACK_AUTH_BASE_URLS =
-        {
-            "http://26.17.117.206:3001"
-        };
+        public const string DEFAULT_AUTH_BASE_URL = "https://kufkgjyeptuzptmegsmf.supabase.co/functions/v1/frentepartido-auth";
+        public static readonly string[] FALLBACK_AUTH_BASE_URLS = {};
 
         public static PlayerPreferences Preferences { get; private set; } = new PlayerPreferences();
 
@@ -55,7 +52,23 @@ namespace FrentePartido.Core
                 Preferences.authBaseUrl = DEFAULT_AUTH_BASE_URL;
             }
 
+            if (IsLegacyRadminUrl(Preferences.authBaseUrl))
+            {
+                Preferences.authBaseUrl = DEFAULT_AUTH_BASE_URL;
+                PlayerPrefs.DeleteKey(AUTH_URL_PREFS_KEY);
+            }
+
             Debug.Log($"[GameConfig] Loaded. Name: {Preferences.playerName} | Auth: {Preferences.authBaseUrl}");
+        }
+
+        private static bool IsLegacyRadminUrl(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                return false;
+            }
+
+            return url.Contains("26.234.30.190") || url.Contains("26.17.117.206");
         }
 
         public static void Save()

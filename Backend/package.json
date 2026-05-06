@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "schema:apply": "node scripts/apply-supabase-schema.js"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",

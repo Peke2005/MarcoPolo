@@ -385,13 +385,9 @@ namespace FrentePartido.UI
                 _abilityCooldown.ConfigureForAbility("Q", new Color(0.4f, 0.4f, 0.4f, 1f));
                 return;
             }
-            string label = def.type switch
-            {
-                FrentePartido.Data.AbilityType.Dash => "D",
-                FrentePartido.Data.AbilityType.Shield => "S",
-                FrentePartido.Data.AbilityType.Mine => "M",
-                _ => "Q"
-            };
+            // Label is the keybind, not the ability initial. Earlier "D" looked like
+            // the WASD movement key and confused players. The ability key is always Q.
+            string label = "Q";
             Color tint = def.type switch
             {
                 FrentePartido.Data.AbilityType.Dash => new Color(0.25f, 0.85f, 1f, 1f),

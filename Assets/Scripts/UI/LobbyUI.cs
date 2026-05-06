@@ -100,7 +100,7 @@ namespace FrentePartido.UI
             }
 
             SelectAbility(GameConfig.Preferences.abilityIndex);
-            SelectFaction(GameConfig.Preferences.colorIndex);
+            _selectedFaction = 0;
 
             if (NetworkSessionManager.Instance != null)
             {
@@ -287,7 +287,8 @@ namespace FrentePartido.UI
             hl.childControlWidth = true; hl.childControlHeight = true;
 
             BuildAbilities(cols.transform);
-            BuildFaction(cols.transform);
+            // Faction selection removed: spawn order assigns Blue (host) and Red (client)
+            // automatically via PlayerSpawnManager.
         }
 
         void BuildAbilities(Transform p)

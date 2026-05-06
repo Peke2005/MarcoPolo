@@ -71,7 +71,10 @@ namespace FrentePartido.UI
             }
             if (_reloadBar != null) _reloadBar.fillAmount = 0f;
             if (_localAbility != null)
+            {
                 _localAbility.OnCooldownChanged += UpdateAbilityCooldown;
+                _localAbility.EquippedAbilityIndex.OnValueChanged += HandleEquippedAbilityChanged;
+            }
 
             if (_beaconPanel != null) _beaconPanel.SetActive(false);
             if (_announcementText != null) _announcementText.text = "";
@@ -94,7 +97,10 @@ namespace FrentePartido.UI
                 _localWeapon.OnGrenadeCountChanged -= UpdateGrenadeCount;
             }
             if (_localAbility != null)
+            {
                 _localAbility.OnCooldownChanged -= UpdateAbilityCooldown;
+                _localAbility.EquippedAbilityIndex.OnValueChanged -= HandleEquippedAbilityChanged;
+            }
 
             UnsubscribeFromMatch();
         }
@@ -374,6 +380,11 @@ namespace FrentePartido.UI
                 UpdateScore(MatchManager.Instance.Player1Score.Value, MatchManager.Instance.Player2Score.Value);
 
             ConfigureAbilityIcon(ability);
+        }
+
+        private void HandleEquippedAbilityChanged(int oldIndex, int newIndex)
+        {
+            ConfigureAbilityIcon(_localAbility);
         }
 
         private void ConfigureAbilityIcon(Abilities.AbilityController ability)

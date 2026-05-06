@@ -75,10 +75,38 @@ namespace FrentePartido.Abilities
 
             CooldownRemaining.OnValueChanged += HandleCooldownChanged;
 
+            if (IsServer)
+                ApplyAbilityFromLobby();
+
             if (IsOwner && _input != null)
             {
                 _input.OnAbilityPressed += HandleAbilityInput;
             }
+        }
+
+        private void ApplyAbilityFromLobby()
+        {
+            if (availableAbilities == null || availableAbilities.Length == 0) return;
+
+            var session = FrentePartido.Networking.NetworkSessionManager.Instance;
+            if (session == null) return;
+
+            var lobby = session.GetLobbyPlayers();
+            if (lobby == null) return;
+
+            int chosenIndex = -1;
+            foreach (var info in lobby)
+            {
+                if (info.ClientId == OwnerClientId)
+                {
+                    chosenIndex = info.AbilityIndex;
+                    break;
+                }
+            }
+
+            if (chosenIndex < 0 || chosenIndex >= availableAbilities.Length) return;
+            EquippedAbilityIndex.Value = chosenIndex;
+            Debug.Log($"[AbilityController] Player {OwnerClientId} equipped index {chosenIndex} from lobby selection.");
         }
 
         public override void OnNetworkDespawn()

@@ -63,8 +63,15 @@ namespace FrentePartido.Editor
                 return;
             }
 
-            UnityEngine.Debug.Log("[DockerAutoStart] Starting auth backend...");
-            if (RunDockerCompose(backendPath, "up -d --build", "Auth backend running on http://localhost:3001"))
+            bool useSupabase = HasSupabaseEnv(backendPath);
+            UnityEngine.Debug.Log(useSupabase
+                ? "[DockerAutoStart] Starting auth backend with Supabase DATABASE_URL..."
+                : "[DockerAutoStart] Starting auth backend with local Docker Postgres...");
+
+            string composeArgs = useSupabase
+                ? "-f docker-compose.supabase.yml up -d --build"
+                : "up -d --build";
+            if (RunDockerCompose(backendPath, composeArgs, "Auth backend running on http://localhost:3001"))
             {
                 return;
             }
@@ -154,6 +161,19 @@ namespace FrentePartido.Editor
             {
                 return false;
             }
+        }
+
+        private static bool HasSupabaseEnv(string backendPath)
+        {
+            string envPath = Path.Combine(backendPath, ".env");
+            if (!File.Exists(envPath)) return false;
+            foreach (string line in File.ReadAllLines(envPath))
+            {
+                string trimmed = line.Trim();
+                if (trimmed.StartsWith("DATABASE_URL=") && trimmed.Length > "DATABASE_URL=".Length)
+                    return true;
+            }
+            return false;
         }
     }
 }

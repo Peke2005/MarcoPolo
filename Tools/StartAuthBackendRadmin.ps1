@@ -49,7 +49,19 @@ foreach ($listener in $listeners) {
 Write-Host "Starting auth backend Docker in $backend"
 Push-Location $backend
 try {
-    docker compose up -d --build
+    $envPath = Join-Path $backend '.env'
+    $useSupabase = $false
+    if (Test-Path $envPath) {
+        $useSupabase = Select-String -Path $envPath -Pattern '^\s*DATABASE_URL\s*=' -Quiet
+    }
+
+    if ($useSupabase) {
+        Write-Host "Supabase DATABASE_URL found in Backend\.env. Starting API without local Postgres container."
+        docker compose -f docker-compose.supabase.yml up -d --build
+    } else {
+        Write-Host "No Supabase DATABASE_URL found. Starting local Docker Postgres + API."
+        docker compose up -d --build
+    }
 } finally {
     Pop-Location
 }

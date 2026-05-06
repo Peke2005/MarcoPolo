@@ -514,8 +514,8 @@ namespace FrentePartido.Core
             AddCrate(root, new Vector2( 4.5f, -2f), 1.0f, 1.0f);
             AddCrate(root, new Vector2( 0f,   3.2f), 2.2f, 0.8f);
             AddCrate(root, new Vector2( 0f,  -3.2f), 2.2f, 0.8f);
-            AddCrate(root, new Vector2(-8f,   0f),   0.9f, 2.4f);
-            AddCrate(root, new Vector2( 8f,   0f),   0.9f, 2.4f);
+            AddCrate(root, new Vector2(-6.9f, 0f),   0.9f, 2.4f);
+            AddCrate(root, new Vector2( 6.9f, 0f),   0.9f, 2.4f);
 
             AddBarrel(root, new Vector2(-2f,  0.7f));
             AddBarrel(root, new Vector2( 2f, -0.7f));

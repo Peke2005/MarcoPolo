@@ -14,6 +14,18 @@ Clients must be connected to the same Radmin VPN if auth is hosted on a `26.x.x.
 
 ## Backend host PC
 
+### Supabase mode
+
+1. Create Supabase project.
+2. Copy Postgres connection string from Supabase Dashboard -> Project Settings -> Database.
+3. Create `Backend\.env` from `Backend\.env.example`.
+4. Put your real `DATABASE_URL` and `JWT_SECRET`.
+5. Run host script. It detects `DATABASE_URL` and starts only the API container; database lives in Supabase.
+
+Do not commit `Backend\.env`.
+
+### Local Docker fallback
+
 Run from repo root:
 
 ```powershell

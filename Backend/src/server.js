@@ -14,13 +14,34 @@ app.use((err, req, res, next) => {
   next(err);
 });
 
-const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME || 'frentepartido',
-  user: process.env.DB_USER || 'fpuser',
-  password: process.env.DB_PASSWORD || 'fppass123',
-});
+const DATABASE_URL = process.env.DATABASE_URL || process.env.SUPABASE_DB_URL || '';
+const DB_PROVIDER = DATABASE_URL ? 'supabase' : 'postgres';
+
+function shouldUseSsl() {
+  const sslMode = (process.env.PGSSLMODE || '').toLowerCase();
+  const dbSsl = (process.env.DB_SSL || '').toLowerCase();
+  return Boolean(DATABASE_URL) || sslMode === 'require' || dbSsl === 'true';
+}
+
+const pool = new Pool(DATABASE_URL
+  ? {
+      connectionString: DATABASE_URL,
+      ssl: shouldUseSsl() ? { rejectUnauthorized: false } : false,
+      max: parseInt(process.env.DB_POOL_MAX || '5', 10),
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+    }
+  : {
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '5432', 10),
+      database: process.env.DB_NAME || 'frentepartido',
+      user: process.env.DB_USER || 'fpuser',
+      password: process.env.DB_PASSWORD || 'fppass123',
+      ssl: shouldUseSsl() ? { rejectUnauthorized: false } : false,
+      max: parseInt(process.env.DB_POOL_MAX || '10', 10),
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+    });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
 const SALT_ROUNDS = 10;
@@ -71,6 +92,21 @@ async function ensureStore() {
 }
 
 async function ensurePostgresSchema() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      username VARCHAR(50) UNIQUE NOT NULL,
+      email VARCHAR(255) UNIQUE NOT NULL,
+      password_hash VARCHAR(255) NOT NULL,
+      display_name VARCHAR(50) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      last_login TIMESTAMP
+    )
+  `);
+
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)');
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS user_stats (
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -285,7 +321,7 @@ async function requireAuth(req, res, next) {
 
 app.get('/health', async (req, res) => {
   await ensureStore();
-  res.json({ status: 'ok', store: useFileStore ? 'file' : 'postgres' });
+  res.json({ status: 'ok', store: useFileStore ? 'file' : DB_PROVIDER });
 });
 
 app.post('/auth/register', async (req, res) => {

@@ -130,8 +130,8 @@ namespace FrentePartido.Editor
             var map1 = CreateOrLoad<Data.MapDefinition>($"{SO_PATH}/Maps/Map_TrincheraPartida.asset");
             map1.mapName = "Trinchera Partida";
             map1.mapId = "trinchera";
-            map1.spawnPointA = new Vector2(-7f, 0f);
-            map1.spawnPointB = new Vector2(7f, 0f);
+            map1.spawnPointA = new Vector2(-9f, 0f);
+            map1.spawnPointB = new Vector2(9f, 0f);
             map1.beaconPosition = Vector2.zero;
             map1.pickupSpawnPoints = new Vector2[] {
                 new Vector2(-3.5f, 2.5f),

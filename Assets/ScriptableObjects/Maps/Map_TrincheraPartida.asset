@@ -14,8 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   mapName: Trinchera Partida
   mapId: trinchera
-  spawnPointA: {x: -7, y: 0}
-  spawnPointB: {x: 7, y: 0}
+  spawnPointA: {x: -9, y: 0}
+  spawnPointB: {x: 9, y: 0}
   beaconPosition: {x: 0, y: 0}
   pickupSpawnPoints:
   - {x: -2.8, y: -4.4}

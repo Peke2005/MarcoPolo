@@ -102,6 +102,12 @@ namespace FrentePartido.Combat
         {
             if (!IsOwner || !IsSpawned) return;
 
+            if (_input != null && !_input.IsInputEnabled)
+            {
+                _fireHeld = false;
+                return;
+            }
+
             _fireCooldown -= Time.deltaTime;
 
             if (_fireHeld && CanFire())
@@ -129,10 +135,17 @@ namespace FrentePartido.Combat
 
         private void HandleFirePressed()
         {
+            if (_input != null && !_input.IsInputEnabled) return;
+            if (_playerHealth != null && _playerHealth.IsDead) return;
             _fireHeld = true;
         }
 
         private void HandleFireReleased()
+        {
+            _fireHeld = false;
+        }
+
+        public void CancelHeldFire()
         {
             _fireHeld = false;
         }
@@ -438,6 +451,8 @@ namespace FrentePartido.Combat
         {
             if (!IsServer) return;
 
+            CancelHeldFireClientRpc();
+
             if (_reloadCoroutine != null)
             {
                 StopCoroutine(_reloadCoroutine);
@@ -447,6 +462,12 @@ namespace FrentePartido.Combat
             IsReloading.Value = false;
             CurrentAmmo.Value = weaponData != null ? weaponData.magazineSize : 8;
             GrenadesRemaining.Value = 1;
+        }
+
+        [ClientRpc]
+        private void CancelHeldFireClientRpc()
+        {
+            _fireHeld = false;
         }
 
         // ----- Callbacks -----

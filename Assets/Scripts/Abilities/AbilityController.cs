@@ -143,6 +143,17 @@ namespace FrentePartido.Abilities
             if (CooldownRemaining.Value > 0f) return;
 
             Vector2 aimDir = GetAimDirection();
+
+            // Movement abilities (Dash) must run on the OWNER. The player uses
+            // owner-authoritative NetworkTransform, so a server-side TeleportTo
+            // never replicates back to the client. Run dash locally first; the
+            // server RPC then just tracks cooldown.
+            AbilityDefinition def = CurrentAbility;
+            if (def != null && def.type == AbilityType.Dash && dashAbility != null && _motor != null)
+            {
+                dashAbility.Execute(_motor, aimDir, def.value1, def.value2);
+            }
+
             UseAbilityServerRpc(aimDir);
         }
 

@@ -65,43 +65,55 @@ namespace FrentePartido.Abilities
 
         private GameObject SpawnShieldObject(Vector2 position, float angle)
         {
-            GameObject shield;
+            // Build a bubble around the player: visible blue sphere + circle collider.
+            GameObject shield = new GameObject("PlayerShield");
+            shield.transform.SetParent(transform, false);
+            shield.transform.localPosition = Vector3.zero;
+            shield.transform.localRotation = Quaternion.identity;
+            shield.transform.localScale = Vector3.one * 1.6f;
 
-            if (shieldPrefab != null)
-            {
-                shield = Instantiate(shieldPrefab, position, Quaternion.Euler(0f, 0f, angle));
-            }
-            else
-            {
-                // Create a simple shield collider if no prefab assigned
-                shield = new GameObject("PlayerShield");
-                shield.transform.position = position;
-                shield.transform.rotation = Quaternion.Euler(0f, 0f, angle);
+            CircleCollider2D col = shield.AddComponent<CircleCollider2D>();
+            col.isTrigger = false;
+            col.radius = 0.5f; // local — visible bubble of ~0.8u world radius
 
-                // Box collider as shield surface
-                BoxCollider2D col = shield.AddComponent<BoxCollider2D>();
-                col.size = new Vector2(0.3f, 1.5f);
-                col.isTrigger = false;
+            SpriteRenderer sr = shield.AddComponent<SpriteRenderer>();
+            sr.sprite = GetBubbleSprite();
+            sr.color = shieldColor;
+            sr.sortingOrder = 12;
 
-                // Visual
-                SpriteRenderer sr = shield.AddComponent<SpriteRenderer>();
-                sr.color = shieldColor;
-                sr.sortingOrder = 5;
-            }
-
-            // Attach shield damage handler
-            ShieldDamageReceiver receiver = shield.GetComponent<ShieldDamageReceiver>();
-            if (receiver == null)
-                receiver = shield.AddComponent<ShieldDamageReceiver>();
-
+            ShieldDamageReceiver receiver = shield.AddComponent<ShieldDamageReceiver>();
             receiver.Initialize(this);
 
-            // Parent to player so it moves with them
-            shield.transform.SetParent(transform);
-
             shield.layer = gameObject.layer;
-
             return shield;
+        }
+
+        private static Sprite _bubbleSprite;
+        private static Sprite GetBubbleSprite()
+        {
+            if (_bubbleSprite != null) return _bubbleSprite;
+            int size = 128;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            var px = new Color[size * size];
+            Vector2 c = new Vector2((size - 1) * 0.5f, (size - 1) * 0.5f);
+            float outer = size * 0.48f;
+            float inner = size * 0.36f;
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float d = Vector2.Distance(new Vector2(x, y), c);
+                float a;
+                if (d > outer) a = 0f;
+                else if (d > inner) a = Mathf.Clamp01((outer - d) / (outer - inner)) * 0.95f;
+                else a = Mathf.Clamp01(0.18f + (1f - d / inner) * 0.10f);
+                px[y * size + x] = new Color(1f, 1f, 1f, a);
+            }
+            tex.SetPixels(px);
+            tex.filterMode = FilterMode.Bilinear;
+            tex.wrapMode = TextureWrapMode.Clamp;
+            tex.Apply();
+            _bubbleSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 64f);
+            return _bubbleSprite;
         }
 
         private IEnumerator ShieldDurationRoutine(float duration)
@@ -161,19 +173,21 @@ namespace FrentePartido.Abilities
         [ClientRpc]
         private void ShowShieldClientRpc(Vector2 position, float angle)
         {
-            // Server already has the shield object; clients create a local visual
+            // Server already has its shield object; clients create their own bubble visual.
             if (IsServer) return;
 
             DestroyActiveShield();
 
             _activeShield = new GameObject("ShieldVisual");
-            _activeShield.transform.position = position;
-            _activeShield.transform.rotation = Quaternion.Euler(0f, 0f, angle);
-            _activeShield.transform.SetParent(transform);
+            _activeShield.transform.SetParent(transform, false);
+            _activeShield.transform.localPosition = Vector3.zero;
+            _activeShield.transform.localRotation = Quaternion.identity;
+            _activeShield.transform.localScale = Vector3.one * 1.6f;
 
             SpriteRenderer sr = _activeShield.AddComponent<SpriteRenderer>();
+            sr.sprite = GetBubbleSprite();
             sr.color = shieldColor;
-            sr.sortingOrder = 5;
+            sr.sortingOrder = 12;
         }
 
         [ClientRpc]

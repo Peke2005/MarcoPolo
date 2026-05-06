@@ -76,24 +76,56 @@ namespace FrentePartido.Abilities
         {
             GameObject mineObj = new GameObject($"Mine_Player{OwnerClientId}");
             mineObj.transform.position = position;
+            mineObj.transform.localScale = Vector3.one;
 
-            // Visual sprite
+            // Visual sprite — visible orange disc with darker center so it reads as a hazard.
             SpriteRenderer sr = mineObj.AddComponent<SpriteRenderer>();
-            sr.color = mineColor;
-            sr.sortingOrder = -1;
-            // Scale to represent mine size
-            mineObj.transform.localScale = Vector3.one * 0.4f;
+            sr.sprite = GetMineSprite();
+            sr.color = Color.white;
+            sr.sortingOrder = 4;
 
             // Trigger collider for detection
             CircleCollider2D trigger = mineObj.AddComponent<CircleCollider2D>();
             trigger.isTrigger = true;
-            trigger.radius = detectionRadius / 0.4f; // Compensate for localScale
+            trigger.radius = detectionRadius;
 
-            // Physics body for trigger detection
+            // Kinematic body so OnTriggerEnter2D fires.
             Rigidbody2D rb = mineObj.AddComponent<Rigidbody2D>();
             rb.bodyType = RigidbodyType2D.Kinematic;
 
             return mineObj;
+        }
+
+        private static Sprite _mineSprite;
+        private static Sprite GetMineSprite()
+        {
+            if (_mineSprite != null) return _mineSprite;
+            int size = 96;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            var px = new Color[size * size];
+            Vector2 c = new Vector2((size - 1) * 0.5f, (size - 1) * 0.5f);
+            float outer = size * 0.42f;
+            float inner = size * 0.18f;
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float d = Vector2.Distance(new Vector2(x, y), c);
+                Color col = new Color(0, 0, 0, 0);
+                if (d <= outer)
+                {
+                    float t = 1f - d / outer;
+                    col = new Color(1f, 0.45f + 0.2f * t, 0.18f * t, 1f);
+                    if (d < inner) col = new Color(0.85f, 0.10f, 0.08f, 1f);
+                    if (d > outer - 2f) col = new Color(0.10f, 0.06f, 0.04f, 1f); // border
+                }
+                px[y * size + x] = col;
+            }
+            tex.SetPixels(px);
+            tex.filterMode = FilterMode.Bilinear;
+            tex.wrapMode = TextureWrapMode.Clamp;
+            tex.Apply();
+            _mineSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 96f);
+            return _mineSprite;
         }
 
         private void DestroyActiveMine()

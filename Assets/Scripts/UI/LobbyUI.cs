@@ -290,7 +290,7 @@ namespace FrentePartido.UI
 
         void BuildLoadout(Transform p)
         {
-            var section = LayoutRow("Loadout", p, 330);
+            var section = LayoutRow("Loadout", p, 430);
             var cols = Panel("Cols", section.transform, Color.clear);
             Stretch(cols);
             var hl = cols.gameObject.AddComponent<HorizontalLayoutGroup>();
@@ -306,15 +306,15 @@ namespace FrentePartido.UI
         {
             var panel = Panel("AbPanel", p, CARD);
 
-            var title = Txt("AbTitle", panel.transform, "HABILIDAD", 23, FontStyles.Bold, TXT);
-            Anchors(title, 0.05f, 0.88f, 0.95f, 0.98f);
+            var title = Txt("AbTitle", panel.transform, "HABILIDAD", 28, FontStyles.Bold, TXT);
+            Anchors(title, 0.05f, 0.90f, 0.95f, 0.98f);
             title.alignment = TextAlignmentOptions.Left;
             title.characterSpacing = 3;
 
             // Buttons row — manual anchors instead of HorizontalLayoutGroup, the
             // layout group was sometimes collapsing children so labels disappeared.
             var row = Panel("AbRow", panel.transform, Color.clear);
-            Anchors(row, 0.05f, 0.43f, 0.95f, 0.82f);
+            Anchors(row, 0.05f, 0.50f, 0.95f, 0.87f);
 
             _abilityHighlights = new Image[3];
             _dashButton   = AbilityBtnAt(row.transform, "Dash",   AB_ICON[0], 0, 0.000f, 0.320f);
@@ -323,17 +323,17 @@ namespace FrentePartido.UI
 
             // Info strip
             var infoBg = Panel("AbInfo", panel.transform, c(0.10f, 0.11f, 0.14f));
-            Anchors(infoBg, 0.05f, 0.06f, 0.95f, 0.39f);
+            Anchors(infoBg, 0.05f, 0.07f, 0.95f, 0.45f);
 
             _selectedAbilityText = Txt("AbName", infoBg.transform, AB_ICON[0] + "  " + AB_NAME[0],
-                28, FontStyles.Bold, YELLOW);
-            Anchors(_selectedAbilityText, 0.04f, 0.50f, 0.96f, 0.95f);
+                34, FontStyles.Bold, YELLOW);
+            Anchors(_selectedAbilityText, 0.04f, 0.52f, 0.96f, 0.95f);
             _selectedAbilityText.alignment = TextAlignmentOptions.Left;
             _selectedAbilityText.overflowMode = TextOverflowModes.Overflow;
 
             _selectedAbilityDesc = Txt("AbDesc", infoBg.transform, AB_DESC[0],
-                20, FontStyles.Bold, TXT);
-            Anchors(_selectedAbilityDesc, 0.04f, 0.08f, 0.96f, 0.48f);
+                26, FontStyles.Bold, TXT);
+            Anchors(_selectedAbilityDesc, 0.04f, 0.08f, 0.96f, 0.47f);
             _selectedAbilityDesc.alignment = TextAlignmentOptions.TopLeft;
             _selectedAbilityDesc.enableWordWrapping = true;
             _selectedAbilityDesc.overflowMode = TextOverflowModes.Overflow;
@@ -351,11 +351,12 @@ namespace FrentePartido.UI
             _abilityHighlights[idx] = bg.GetComponent<Image>();
             var btn = bg.gameObject.AddComponent<Button>();
 
-            var label = Txt($"{name}Lbl", bg.transform, icon, 40, FontStyles.Bold, TXT);
-            Anchors(label, 0f, 0.45f, 1f, 0.95f); label.alignment = TextAlignmentOptions.Center;
+            var label = Txt($"{name}Lbl", bg.transform, icon, 48, FontStyles.Bold, TXT);
+            Anchors(label, 0f, 0.50f, 1f, 0.96f);
+            label.alignment = TextAlignmentOptions.Center;
 
-            var sub = Txt($"{name}Sub", bg.transform, AB_NAME[idx], 18, FontStyles.Bold, TXT);
-            Anchors(sub, 0.04f, 0.04f, 0.96f, 0.44f);
+            var sub = Txt($"{name}Sub", bg.transform, AB_NAME[idx], 24, FontStyles.Bold, TXT);
+            Anchors(sub, 0.04f, 0.08f, 0.96f, 0.48f);
             sub.alignment = TextAlignmentOptions.Center;
             sub.enableWordWrapping = true;
             sub.overflowMode = TextOverflowModes.Overflow;

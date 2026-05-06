@@ -1,0 +1,39 @@
+Mono path[0] = 'C:/Users/polca/Desktop/MarcoPolo/Builds/Release/FrentePartido/FrentePartido_Data/Managed'
+Mono config path = 'C:/Users/polca/Desktop/MarcoPolo/Builds/Release/FrentePartido/MonoBleedingEdge/etc'
+Input System module state changed to: Initialized.
+[PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+Initialize engine version: 2022.3.62f1 (4af31df58517)
+[Subsystems] Discovering subsystems at path C:/Users/polca/Desktop/MarcoPolo/Builds/Release/FrentePartido/FrentePartido_Data/UnitySubsystems
+GfxDevice: creating device client; threaded=1; jobified=1
+Direct3D:
+    Version:  Direct3D 11.0 [level 11.1]
+    Renderer: NVIDIA GeForce RTX 4060 Laptop GPU (ID=0x28a0)
+    Vendor:   NVIDIA
+    VRAM:     7956 MB
+    Driver:   32.0.15.9571
+Begin MonoManager ReloadAssembly
+- Loaded All Assemblies, in  0.134 seconds
+- Finished resetting the current domain, in  0.002 seconds
+<RI> Initializing input.
+Using Windows.Gaming.Input
+<RI> Input initialized.
+<RI> Initialized touch support.
+[PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+UnloadTime: 0.725400 ms
+[ServiceInit] Signed in. PlayerId: ju5KrsZbX6VhMRZSeSGwKbDgL0vX
+[GameConfig] Loaded. Name: Bryan | Auth: http://26.234.30.190:3001
+Unloading 6 Unused Serialized files (Serialized files now loaded: 0)
+[PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+UnloadTime: 0.410600 ms
+Unloading 5 unused Assets to reduce memory usage. Loaded Objects now: 2393.
+Total: 1.811700 ms (FindLiveObjects: 0.077400 ms CreateObjectMapping: 0.025200 ms MarkObjects: 1.689000 ms  DeleteObjects: 0.020000 ms)
+
+[GameConfig] Loaded. Name: Bryan | Auth: http://26.234.30.190:3001
+[Auth] Auto-login OK via http://26.234.30.190:3001
+[Auth] Sesion recuperada. Entrando...
+Unloading 5 Unused Serialized files (Serialized files now loaded: 0)
+[PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+UnloadTime: 5.286800 ms
+Unloading 2 unused Assets to reduce memory usage. Loaded Objects now: 2728.
+Total: 1.680900 ms (FindLiveObjects: 0.077700 ms CreateObjectMapping: 0.028100 ms MarkObjects: 1.553800 ms  DeleteObjects: 0.021200 ms)
+

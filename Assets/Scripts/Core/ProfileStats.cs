@@ -1,13 +1,14 @@
 using UnityEngine;
+using UnityEngine.Networking;
+using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Threading.Tasks;
 
 namespace FrentePartido.Core
 {
     public static class ProfileStats
     {
-        private const string MatchesKey = "FP_Profile_Matches";
-        private const string WinsKey = "FP_Profile_Wins";
-        private const string LossesKey = "FP_Profile_Losses";
-
         public readonly struct Snapshot
         {
             public readonly int Matches;
@@ -28,19 +29,97 @@ namespace FrentePartido.Core
 
         public static Snapshot Load()
         {
-            return new Snapshot(
-                PlayerPrefs.GetInt(MatchesKey, 0),
-                PlayerPrefs.GetInt(WinsKey, 0),
-                PlayerPrefs.GetInt(LossesKey, 0));
+            return new Snapshot(0, 0, 0);
         }
 
-        public static void RecordMatch(bool won)
+        public static Task<Snapshot> FetchAsync()
         {
-            var current = Load();
-            PlayerPrefs.SetInt(MatchesKey, current.Matches + 1);
-            PlayerPrefs.SetInt(WinsKey, current.Wins + (won ? 1 : 0));
-            PlayerPrefs.SetInt(LossesKey, current.Losses + (won ? 0 : 1));
-            PlayerPrefs.Save();
+            return SendStatsRequest("GET", "/profile/stats", null);
+        }
+
+        public static Task<Snapshot> RecordMatchAsync(bool won)
+        {
+            string body = JsonUtility.ToJson(new MatchResultRequest { won = won });
+            return SendStatsRequest("POST", "/profile/match", body);
+        }
+
+        private static async Task<Snapshot> SendStatsRequest(string method, string endpoint, string jsonBody)
+        {
+            string token = PlayerPrefs.GetString("auth_token", "");
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                Debug.LogWarning("[ProfileStats] No auth_token. Stats require login.");
+                return Load();
+            }
+
+            string lastError = "";
+            foreach (string baseUrl in GetBaseUrls())
+            {
+                try
+                {
+                    using var request = new UnityWebRequest($"{baseUrl}{endpoint}", method);
+                    request.timeout = 8;
+                    request.downloadHandler = new DownloadHandlerBuffer();
+                    if (!string.IsNullOrEmpty(jsonBody))
+                    {
+                        byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonBody);
+                        request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+                    }
+                    request.SetRequestHeader("Authorization", $"Bearer {token}");
+                    request.SetRequestHeader("Content-Type", "application/json");
+
+                    var op = request.SendWebRequest();
+                    while (!op.isDone) await Task.Yield();
+
+                    if (request.result != UnityWebRequest.Result.Success)
+                    {
+                        lastError = DescribeRequestError(request, baseUrl);
+                        if (IsConnectionFailure(request)) continue;
+                        Debug.LogWarning($"[ProfileStats] {lastError}");
+                        return Load();
+                    }
+
+                    var response = JsonUtility.FromJson<StatsResponse>(request.downloadHandler.text);
+                    return new Snapshot(response.matchesPlayed, response.wins, response.losses);
+                }
+                catch (Exception e)
+                {
+                    lastError = $"Sin conexion a stats ({baseUrl}): {e.Message}";
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(lastError))
+                Debug.LogWarning($"[ProfileStats] {lastError}");
+            return Load();
+        }
+
+        private static IEnumerable<string> GetBaseUrls()
+        {
+            string configuredUrl = GameConfig.Preferences?.authBaseUrl;
+            if (string.IsNullOrWhiteSpace(configuredUrl))
+                configuredUrl = GameConfig.DEFAULT_AUTH_BASE_URL;
+
+            var seen = new HashSet<string>();
+            string primary = configuredUrl.Trim().TrimEnd('/');
+            if (seen.Add(primary)) yield return primary;
+
+            foreach (string fallback in GameConfig.FALLBACK_AUTH_BASE_URLS)
+            {
+                string trimmed = fallback.Trim().TrimEnd('/');
+                if (seen.Add(trimmed)) yield return trimmed;
+            }
+        }
+
+        private static bool IsConnectionFailure(UnityWebRequest request)
+        {
+            return request.result == UnityWebRequest.Result.ConnectionError || request.responseCode == 0;
+        }
+
+        private static string DescribeRequestError(UnityWebRequest request, string baseUrl)
+        {
+            if (!string.IsNullOrWhiteSpace(request.error))
+                return $"No se puede contactar con stats ({baseUrl}): {request.error}";
+            return $"Stats HTTP {request.responseCode} ({baseUrl})";
         }
 
         private static string ResolveRank(int matches, int wins, float winRate)
@@ -51,6 +130,22 @@ namespace FrentePartido.Core
             if (wins >= 10 && winRate >= 50f) return "PLATA";
             if (wins >= 4) return "BRONCE";
             return "RECLUTA";
+        }
+
+        [Serializable]
+        private class MatchResultRequest
+        {
+            public bool won;
+        }
+
+        [Serializable]
+        private class StatsResponse
+        {
+            public int matchesPlayed;
+            public int wins;
+            public int losses;
+            public float winRate;
+            public string rank;
         }
     }
 }

@@ -302,11 +302,25 @@ namespace FrentePartido.UI
             return GameConfig.Preferences?.playerName ?? "Jugador";
         }
 
-        private void ShowProfilePanel()
+        private async void ShowProfilePanel()
         {
             var stats = ProfileStats.Load();
             if (_profileNameValue != null)
                 _profileNameValue.text = ResolveDisplayName();
+            if (_profileRankValue != null)
+                _profileRankValue.text = "CARGANDO";
+            if (_profileMatchesValue != null)
+                _profileMatchesValue.text = "...";
+            if (_profileWinsValue != null)
+                _profileWinsValue.text = "...";
+            if (_profileLossesValue != null)
+                _profileLossesValue.text = "...";
+            if (_profileWinRateValue != null)
+                _profileWinRateValue.text = "...";
+            if (_profilePanelRoot != null)
+                _profilePanelRoot.SetActive(true);
+
+            stats = await ProfileStats.FetchAsync();
             if (_profileRankValue != null)
                 _profileRankValue.text = stats.Rank;
             if (_profileMatchesValue != null)
@@ -317,8 +331,6 @@ namespace FrentePartido.UI
                 _profileLossesValue.text = stats.Losses.ToString();
             if (_profileWinRateValue != null)
                 _profileWinRateValue.text = $"{stats.WinRate:0}%";
-            if (_profilePanelRoot != null)
-                _profilePanelRoot.SetActive(true);
         }
 
         private void HideProfilePanel()

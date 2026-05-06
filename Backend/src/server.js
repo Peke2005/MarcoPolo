@@ -47,15 +47,33 @@ async function ensureStore() {
   if (useFileStore || checkedPostgres) return;
   checkedPostgres = true;
 
-  if (STORE_MODE === 'postgres') return;
-
   try {
     await pool.query('SELECT 1');
   } catch (err) {
+    if (STORE_MODE === 'postgres') {
+      throw err;
+    }
+
     useFileStore = true;
     loadFileStore();
     console.warn(`[Auth API] Postgres unavailable. Using local JSON store: ${DATA_FILE}`);
   }
+
+  if (!useFileStore) {
+    await ensurePostgresSchema();
+  }
+}
+
+async function ensurePostgresSchema() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_stats (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      matches_played INTEGER NOT NULL DEFAULT 0,
+      wins INTEGER NOT NULL DEFAULT 0,
+      losses INTEGER NOT NULL DEFAULT 0,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 }
 
 async function findExistingUser(username, email) {
@@ -145,6 +163,118 @@ async function updateLastLogin(userId) {
   }
 
   await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [userId]);
+}
+
+function emptyStats(userId) {
+  return {
+    user_id: userId,
+    matches_played: 0,
+    wins: 0,
+    losses: 0,
+  };
+}
+
+function rankFor(matches, wins, winRate) {
+  if (matches <= 0) return 'SIN RANGO';
+  if (wins >= 30 && winRate >= 70) return 'ELITE';
+  if (wins >= 18 && winRate >= 60) return 'ORO';
+  if (wins >= 10 && winRate >= 50) return 'PLATA';
+  if (wins >= 4) return 'BRONCE';
+  return 'RECLUTA';
+}
+
+function formatStats(row) {
+  const matchesPlayed = Number(row.matches_played || 0);
+  const wins = Number(row.wins || 0);
+  const losses = Number(row.losses || 0);
+  const winRate = matchesPlayed > 0 ? (wins * 100) / matchesPlayed : 0;
+  return {
+    matchesPlayed,
+    wins,
+    losses,
+    winRate,
+    rank: rankFor(matchesPlayed, wins, winRate),
+  };
+}
+
+async function getUserStats(userId) {
+  await ensureStore();
+
+  if (useFileStore) {
+    const store = loadFileStore();
+    const user = store.users.find(u => u.id === userId);
+    if (!user) return null;
+    user.stats = user.stats || { matches_played: 0, wins: 0, losses: 0 };
+    saveFileStore();
+    return formatStats(user.stats);
+  }
+
+  const result = await pool.query(
+    `INSERT INTO user_stats (user_id)
+     VALUES ($1)
+     ON CONFLICT (user_id) DO NOTHING
+     RETURNING user_id, matches_played, wins, losses`,
+    [userId]
+  );
+
+  if (result.rows[0]) return formatStats(result.rows[0]);
+
+  const stats = await pool.query(
+    'SELECT user_id, matches_played, wins, losses FROM user_stats WHERE user_id = $1',
+    [userId]
+  );
+  return formatStats(stats.rows[0] || emptyStats(userId));
+}
+
+async function recordUserMatch(userId, won) {
+  await ensureStore();
+
+  if (useFileStore) {
+    const store = loadFileStore();
+    const user = store.users.find(u => u.id === userId);
+    if (!user) return null;
+    user.stats = user.stats || { matches_played: 0, wins: 0, losses: 0 };
+    user.stats.matches_played += 1;
+    if (won) user.stats.wins += 1;
+    else user.stats.losses += 1;
+    saveFileStore();
+    return formatStats(user.stats);
+  }
+
+  const result = await pool.query(
+    `INSERT INTO user_stats (user_id, matches_played, wins, losses, updated_at)
+     VALUES ($1, 1, $2, $3, CURRENT_TIMESTAMP)
+     ON CONFLICT (user_id) DO UPDATE SET
+       matches_played = user_stats.matches_played + 1,
+       wins = user_stats.wins + EXCLUDED.wins,
+       losses = user_stats.losses + EXCLUDED.losses,
+       updated_at = CURRENT_TIMESTAMP
+     RETURNING user_id, matches_played, wins, losses`,
+    [userId, won ? 1 : 0, won ? 0 : 1]
+  );
+  return formatStats(result.rows[0]);
+}
+
+async function requireAuth(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Token no proporcionado' });
+  }
+
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = await findUserById(decoded.userId);
+
+    if (!user) {
+      return res.status(401).json({ error: 'Usuario no encontrado' });
+    }
+
+    req.user = user;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Token invalido o expirado' });
+  }
 }
 
 app.get('/health', async (req, res) => {
@@ -252,6 +382,31 @@ app.get('/auth/verify', async (req, res) => {
     });
   } catch (err) {
     return res.status(401).json({ error: 'Token invalido o expirado' });
+  }
+});
+
+app.get('/profile/stats', requireAuth, async (req, res) => {
+  try {
+    const stats = await getUserStats(req.user.id);
+    res.json(stats);
+  } catch (err) {
+    console.error('Stats read error:', err);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+app.post('/profile/match', requireAuth, async (req, res) => {
+  const { won } = req.body;
+  if (typeof won !== 'boolean') {
+    return res.status(400).json({ error: 'won debe ser boolean' });
+  }
+
+  try {
+    const stats = await recordUserMatch(req.user.id, won);
+    res.json(stats);
+  } catch (err) {
+    console.error('Stats write error:', err);
+    res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
 

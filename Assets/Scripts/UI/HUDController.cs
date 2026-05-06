@@ -307,7 +307,7 @@ namespace FrentePartido.UI
             {
                 _profileMatchRecorded = true;
                 ulong localClientId = NetworkManager.Singleton != null ? NetworkManager.Singleton.LocalClientId : ulong.MaxValue;
-                ProfileStats.RecordMatch(winnerClientId == localClientId);
+                _ = ProfileStats.RecordMatchAsync(winnerClientId == localClientId);
             }
 
             int p1 = MatchManager.Instance != null ? MatchManager.Instance.Player1Score.Value : 0;

@@ -48,6 +48,7 @@ namespace FrentePartido.UI
         private TMP_Text _bigOverlayCountdown;
         private Coroutine _bigOverlayCoroutine;
         private CanvasGroup _bigOverlayCg;
+        private int _lastAbilityIndex = -999;
 
         public void Initialize(Player.PlayerHealth health, Combat.WeaponController weapon,
                               Abilities.AbilityController ability, int maxHealth)
@@ -336,6 +337,10 @@ namespace FrentePartido.UI
             {
                 UpdateGrenadeCount(_localWeapon.GrenadesRemaining.Value);
             }
+            if (_localAbility != null && _localAbility.EquippedAbilityIndex.Value != _lastAbilityIndex)
+            {
+                ConfigureAbilityIcon(_localAbility);
+            }
 
             // Update timer from RoundManager
             if (RoundManager.Instance != null && _roundTimer != null)
@@ -390,15 +395,20 @@ namespace FrentePartido.UI
         private void ConfigureAbilityIcon(Abilities.AbilityController ability)
         {
             if (_abilityCooldown == null || ability == null) return;
+            _lastAbilityIndex = ability.EquippedAbilityIndex.Value;
             var def = ability.CurrentAbility;
             if (def == null)
             {
                 _abilityCooldown.ConfigureForAbility("Q", new Color(0.4f, 0.4f, 0.4f, 1f));
                 return;
             }
-            // Label is the keybind, not the ability initial. Earlier "D" looked like
-            // the WASD movement key and confused players. The ability key is always Q.
-            string label = "Q";
+            string label = def.type switch
+            {
+                FrentePartido.Data.AbilityType.Dash => "D",
+                FrentePartido.Data.AbilityType.Shield => "E",
+                FrentePartido.Data.AbilityType.Mine => "M",
+                _ => "Q"
+            };
             Color tint = def.type switch
             {
                 FrentePartido.Data.AbilityType.Dash => new Color(0.25f, 0.85f, 1f, 1f),

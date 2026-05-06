@@ -161,6 +161,30 @@ namespace FrentePartido.Player
             delta = ResolveBlockingDelta(delta);
             Vector2 targetPos = currentPos + delta;
 
+            ApplyPosition(targetPos, immediate);
+        }
+
+        public Vector2 ForceMoveDelta(Vector2 delta)
+        {
+            if (delta.sqrMagnitude < 0.000001f) return Vector2.zero;
+
+            Vector2 currentPos = _rb != null ? _rb.position : (Vector2)transform.position;
+            if (mapDefinition != null)
+            {
+                Vector2 clampedPos = currentPos + delta;
+                clampedPos.x = Mathf.Clamp(clampedPos.x, mapDefinition.boundsMin.x, mapDefinition.boundsMax.x);
+                clampedPos.y = Mathf.Clamp(clampedPos.y, mapDefinition.boundsMin.y, mapDefinition.boundsMax.y);
+                delta = clampedPos - currentPos;
+            }
+
+            delta = ResolveBlockingDelta(delta);
+            Vector2 targetPos = currentPos + delta;
+            ApplyPosition(targetPos, true);
+            return delta;
+        }
+
+        private void ApplyPosition(Vector2 targetPos, bool immediate)
+        {
             // Try physics-aware MovePosition first; if the rigidbody is kinematic
             // or somehow frozen, fall back to a raw transform move so the owner
             // always gets visual feedback.
@@ -248,6 +272,7 @@ namespace FrentePartido.Player
         {
             _rb.position = position;
             _rb.velocity = Vector2.zero;
+            transform.position = new Vector3(position.x, position.y, transform.position.z);
         }
     }
 }

@@ -231,7 +231,7 @@ namespace FrentePartido.Abilities
                 case AbilityType.Shield:
                     if (shieldAbility != null)
                     {
-                        shieldAbility.ActivateServerRpc(aimDirection, ability.duration, ability.value1);
+                        shieldAbility.ActivateShieldServer(aimDirection, ability.duration, ability.value1);
                         return true;
                     }
                     Debug.LogWarning("[AbilityController] ShieldAbility component missing.");
@@ -241,7 +241,7 @@ namespace FrentePartido.Abilities
                     if (mineAbility != null)
                     {
                         Vector2 placePos = (Vector2)transform.position + aimDirection.normalized * 1.5f;
-                        mineAbility.PlaceMineServerRpc(placePos, (int)ability.value1, ability.value2);
+                        mineAbility.PlaceMineServer(placePos, (int)ability.value1, ability.value2);
                         return true;
                     }
                     Debug.LogWarning("[AbilityController] MineAbility component missing.");

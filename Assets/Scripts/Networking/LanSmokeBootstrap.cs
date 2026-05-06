@@ -89,6 +89,11 @@ namespace FrentePartido.Networking
                     StartCoroutine(RunPickupSmoke());
                 }
 
+                if (_isHost && HasArg(args, "-fpAbilitySmoke"))
+                {
+                    StartCoroutine(RunAbilitySmoke());
+                }
+
                 if (_isHost && HasArg(args, ObserveClientMoveArg))
                 {
                     StartCoroutine(RunObserveClientMoveSmoke());
@@ -253,6 +258,107 @@ namespace FrentePartido.Networking
                 int shieldAmount = amount - healAmount;
                 if (healAmount > 0) health.HealServer(healAmount);
                 if (shieldAmount > 0) health.AddArmorServer(shieldAmount);
+            }
+
+            private IEnumerator RunAbilitySmoke()
+            {
+                float deadline = Time.realtimeSinceStartup + 12f;
+
+                while (Time.realtimeSinceStartup < deadline)
+                {
+                    if (GetSpawnedPlayerHealths().Count >= 2)
+                        break;
+
+                    yield return new WaitForSeconds(0.25f);
+                }
+
+                List<PlayerHealth> players = GetSpawnedPlayerHealths();
+                if (players.Count < 2)
+                {
+                    Debug.LogError($"[LanSmoke] Ability check failed: players={players.Count}");
+                    Application.Quit(12);
+                    yield break;
+                }
+
+                bool dashOk = false;
+                bool shieldOk = false;
+                bool mineOk = false;
+
+                PlayerHealth p0 = players[0];
+                PlayerHealth p1 = players[1];
+
+                var motor = p0.GetComponent<PlayerMotor2D>();
+                Component dash = p0.GetComponent("DashAbility");
+                if (motor != null && dash != null)
+                {
+                    Vector2[] dirs = { Vector2.right, Vector2.up, Vector2.down, Vector2.left };
+                    float bestMoved = 0f;
+                    for (int i = 0; i < dirs.Length && !dashOk; i++)
+                    {
+                        Vector3 start = p0.transform.position;
+                        InvokePublic(dash, "Execute", motor, dirs[i], 3f, 18f);
+                        yield return new WaitForSeconds(0.6f);
+                        float moved = Vector2.Distance(start, p0.transform.position);
+                        bestMoved = Mathf.Max(bestMoved, moved);
+                        dashOk = moved > 1.5f;
+                    }
+                    Debug.Log($"[LanSmoke] Ability dash bestMoved={bestMoved:0.00} ok={dashOk}");
+                }
+
+                Component shield = p1.GetComponent("ShieldAbility");
+                if (shield != null)
+                {
+                    p1.CurrentHealth.Value = p1.MaxHealthValue;
+                    InvokePublic(shield, "ActivateShieldServer", Vector2.left, 2.5f, 60f);
+                    yield return new WaitForSeconds(0.1f);
+                    int hpBefore = p1.CurrentHealth.Value;
+                    int passthrough = InvokePublicInt(shield, "AbsorbDamage", 20);
+                    yield return new WaitForSeconds(0.1f);
+                    shieldOk = passthrough == 0 && p1.CurrentHealth.Value == hpBefore;
+                    Debug.Log($"[LanSmoke] Ability shield hp={hpBefore}->{p1.CurrentHealth.Value} passthrough={passthrough} ok={shieldOk}");
+                }
+
+                Component mine = p0.GetComponent("MineAbility");
+                if (mine != null)
+                {
+                    int before = CountMineObjects();
+                    InvokePublic(mine, "PlaceMineServer", (Vector2)p0.transform.position + Vector2.up * 1.5f, 35, 1.5f);
+                    yield return new WaitForSeconds(0.2f);
+                    int after = CountMineObjects();
+                    mineOk = after > before;
+                    Debug.Log($"[LanSmoke] Ability mine count={before}->{after} ok={mineOk}");
+                }
+
+                bool allOk = dashOk && shieldOk && mineOk;
+                Debug.Log($"[LanSmoke] Ability check allOk={allOk}");
+                if (!allOk)
+                    Application.Quit(13);
+            }
+
+            private static void InvokePublic(Component component, string methodName, params object[] args)
+            {
+                if (component == null) return;
+                var method = component.GetType().GetMethod(methodName);
+                method?.Invoke(component, args);
+            }
+
+            private static int InvokePublicInt(Component component, string methodName, params object[] args)
+            {
+                if (component == null) return 0;
+                var method = component.GetType().GetMethod(methodName);
+                object result = method != null ? method.Invoke(component, args) : null;
+                return result is int value ? value : 0;
+            }
+
+            private static int CountMineObjects()
+            {
+                int count = 0;
+                foreach (var mine in FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None))
+                {
+                    if (mine != null && mine.GetType().Name == "ProximityMine")
+                        count++;
+                }
+                return count;
             }
 
             private IEnumerator RunClientMoveSmoke()

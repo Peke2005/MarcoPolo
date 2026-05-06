@@ -6,15 +6,11 @@ namespace FrentePartido.Abilities
 {
     /// <summary>
     /// Executes a dash: rapidly moves the player in a direction.
-    /// Pure MonoBehaviour -- server calls Execute(), coroutine handles movement.
-    /// Wall collision checked via Physics2D.Raycast to stop early if blocked.
+    /// Pure MonoBehaviour -- owner/server calls Execute(), coroutine handles movement.
+    /// Collision uses PlayerMotor2D's same blocker resolver as normal movement.
     /// </summary>
     public class DashAbility : MonoBehaviour
     {
-        [Header("Dash Settings")]
-        [SerializeField] private LayerMask wallLayer;
-        [SerializeField] private float skinWidth = 0.1f;
-
         [Header("Visuals")]
         [SerializeField] private Color dashTintColor = new Color(1f, 1f, 1f, 0.4f);
         [SerializeField] private int ghostCount = 3;
@@ -28,7 +24,6 @@ namespace FrentePartido.Abilities
         private void Awake()
         {
             _spriteRenderer = GetComponentInChildren<SpriteRenderer>();
-            if (wallLayer.value == 0) wallLayer = ~0;
         }
 
         /// <summary>
@@ -73,50 +68,39 @@ namespace FrentePartido.Abilities
             // Disable normal movement during dash
             motor.SetMovementEnabled(false);
 
-            Vector2 startPos = (Vector2)transform.position;
             float duration = distance / speed;
             float elapsed = 0f;
-
-            // Check wall collision -- clamp max distance
-            float actualDistance = distance;
-            RaycastHit2D hit = Physics2D.Raycast(startPos, direction, distance, wallLayer);
-            if (hit.collider != null)
-            {
-                actualDistance = Mathf.Max(0f, hit.distance - skinWidth);
-                Debug.Log($"[DashAbility] Wall detected at {hit.distance:F2}. Clamped to {actualDistance:F2}.");
-            }
-
-            float actualDuration = actualDistance / speed;
-            Vector2 targetPos = startPos + direction * actualDistance;
+            float movedTotal = 0f;
             int ghostsSpawned = 0;
-            float ghostInterval = actualDuration / Mathf.Max(1, ghostCount);
+            float ghostInterval = duration / Mathf.Max(1, ghostCount);
 
-            while (elapsed < actualDuration)
+            while (elapsed < duration && movedTotal < distance)
             {
-                elapsed += Time.deltaTime;
-                float t = Mathf.Clamp01(elapsed / actualDuration);
+                float dt = Time.deltaTime;
+                elapsed += dt;
 
-                // Ease-out for smooth deceleration at end
-                float eased = 1f - (1f - t) * (1f - t);
-                Vector2 newPos = Vector2.Lerp(startPos, targetPos, eased);
-
-                motor.TeleportTo(newPos);
+                float remaining = distance - movedTotal;
+                Vector2 requestedStep = direction * Mathf.Min(speed * dt, remaining);
+                Vector2 appliedStep = motor.ForceMoveDelta(requestedStep);
+                if (appliedStep.sqrMagnitude < 0.0001f)
+                {
+                    Debug.Log("[DashAbility] Dash blocked.");
+                    break;
+                }
+                movedTotal += appliedStep.magnitude;
 
                 // Spawn ghost trail at intervals
                 if (_spriteRenderer != null && ghostsSpawned < ghostCount)
                 {
                     if (elapsed >= ghostInterval * (ghostsSpawned + 1))
                     {
-                        SpawnGhostTrail(newPos);
+                        SpawnGhostTrail(transform.position);
                         ghostsSpawned++;
                     }
                 }
 
                 yield return null;
             }
-
-            // Ensure final position is exact
-            motor.TeleportTo(targetPos);
 
             // Re-enable movement
             motor.SetMovementEnabled(true);
@@ -161,5 +145,6 @@ namespace FrentePartido.Abilities
 
             Destroy(obj);
         }
+
     }
 }

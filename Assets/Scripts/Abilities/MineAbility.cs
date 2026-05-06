@@ -5,18 +5,20 @@ using FrentePartido.Player;
 namespace FrentePartido.Abilities
 {
     /// <summary>
-    /// Server-authoritative proximity mine. Places a mine NetworkObject on the ground.
-    /// Mine triggers on enemy proximity, deals damage, and despawns.
+    /// Server-authoritative proximity mine. Trigger exists on host/server;
+    /// clients get a synced visual via ClientRpc.
     /// Max 1 active mine per player -- placing a new mine destroys the old one.
     /// </summary>
     public class MineAbility : NetworkBehaviour
     {
         [Header("Mine Settings")]
-        [SerializeField] private GameObject minePrefab;
-        [SerializeField] private Color mineColor = new Color(1f, 0.3f, 0.1f, 0.8f);
+        [SerializeField] private Color mineColor = new Color(1f, 0.3f, 0.1f, 0.9f);
 
-        private NetworkObject _activeMineNetObj;
-        private ulong _activeMineNetId;
+        private GameObject _activeMineObj;
+        private ulong _activeMineId;
+        private GameObject _activeMineVisual;
+        private ulong _activeMineVisualId;
+        private static ulong _nextMineId = 1;
 
         // ── Server Execution ────────────────────────────────────────
 
@@ -26,48 +28,33 @@ namespace FrentePartido.Abilities
         /// <param name="position">World position to place mine.</param>
         /// <param name="damage">Explosion damage (AbilityDefinition.value1 cast to int).</param>
         /// <param name="detectionRadius">Trigger radius (AbilityDefinition.value2).</param>
-        [ServerRpc]
+        [ServerRpc(RequireOwnership = false)]
         public void PlaceMineServerRpc(Vector2 position, int damage, float detectionRadius, ServerRpcParams rpcParams = default)
+        {
+            PlaceMineServer(position, damage, detectionRadius);
+        }
+
+        public void PlaceMineServer(Vector2 position, int damage, float detectionRadius)
         {
             if (!IsServer) return;
 
             // Destroy existing mine if any
             DestroyActiveMine();
 
-            // Spawn mine
-            GameObject mineObj;
-
-            if (minePrefab != null)
-            {
-                mineObj = Instantiate(minePrefab, position, Quaternion.identity);
-            }
-            else
-            {
-                // Create runtime mine if no prefab
-                mineObj = CreateRuntimeMine(position, detectionRadius);
-            }
-
-            // Ensure NetworkObject exists
-            NetworkObject netObj = mineObj.GetComponent<NetworkObject>();
-            if (netObj == null)
-            {
-                netObj = mineObj.AddComponent<NetworkObject>();
-            }
+            GameObject mineObj = CreateRuntimeMine(position, detectionRadius);
+            ulong mineId = _nextMineId++;
 
             // Configure mine logic
             ProximityMine mine = mineObj.GetComponent<ProximityMine>();
             if (mine == null)
                 mine = mineObj.AddComponent<ProximityMine>();
 
-            mine.Initialize(OwnerClientId, damage, detectionRadius);
-
-            // Spawn on network
-            netObj.Spawn(true);
-            _activeMineNetObj = netObj;
-            _activeMineNetId = netObj.NetworkObjectId;
+            mine.Initialize(OwnerClientId, mineId, damage, detectionRadius);
+            _activeMineObj = mineObj;
+            _activeMineId = mineId;
 
             // Notify clients
-            ShowMinePlacedClientRpc(position);
+            ShowMinePlacedClientRpc(position, mineId, detectionRadius);
 
             Debug.Log($"[MineAbility] Mine placed at {position} by player {OwnerClientId}. Damage: {damage}, Radius: {detectionRadius}");
         }
@@ -81,7 +68,7 @@ namespace FrentePartido.Abilities
             // Visual sprite — visible orange disc with darker center so it reads as a hazard.
             SpriteRenderer sr = mineObj.AddComponent<SpriteRenderer>();
             sr.sprite = GetMineSprite();
-            sr.color = Color.white;
+            sr.color = mineColor;
             sr.sortingOrder = 4;
 
             // Trigger collider for detection
@@ -130,14 +117,19 @@ namespace FrentePartido.Abilities
 
         private void DestroyActiveMine()
         {
-            if (_activeMineNetObj != null && _activeMineNetObj.IsSpawned)
+            ulong oldId = _activeMineId;
+
+            if (_activeMineObj != null)
             {
-                _activeMineNetObj.Despawn(true);
+                Destroy(_activeMineObj);
                 Debug.Log("[MineAbility] Previous mine destroyed.");
             }
 
-            _activeMineNetObj = null;
-            _activeMineNetId = 0;
+            _activeMineObj = null;
+            _activeMineId = 0;
+
+            if (IsServer && oldId != 0)
+                HideMineClientRpc(oldId);
         }
 
         /// <summary>
@@ -145,21 +137,37 @@ namespace FrentePartido.Abilities
         /// </summary>
         public void NotifyMineExploded(ulong mineNetId)
         {
-            if (mineNetId == _activeMineNetId)
+            if (mineNetId == _activeMineId)
             {
-                _activeMineNetObj = null;
-                _activeMineNetId = 0;
+                _activeMineObj = null;
+                _activeMineId = 0;
+                HideMineClientRpc(mineNetId);
             }
         }
 
         // ── Client Notifications ────────────────────────────────────
 
         [ClientRpc]
-        private void ShowMinePlacedClientRpc(Vector2 position)
+        private void ShowMinePlacedClientRpc(Vector2 position, ulong mineId, float detectionRadius)
         {
             Debug.Log($"[MineAbility] Mine placed visual at {position}");
-            // Actual visual is on the NetworkObject itself, synced via spawn.
-            // Additional particle/audio feedback can be added here.
+            if (IsServer) return;
+            DestroyMineVisual();
+
+            _activeMineVisual = new GameObject($"MineVisual_{OwnerClientId}");
+            _activeMineVisual.transform.position = position;
+            var sr = _activeMineVisual.AddComponent<SpriteRenderer>();
+            sr.sprite = GetMineSprite();
+            sr.color = mineColor;
+            sr.sortingOrder = 4;
+            _activeMineVisualId = mineId;
+        }
+
+        [ClientRpc]
+        private void HideMineClientRpc(ulong mineId)
+        {
+            if (_activeMineVisualId != mineId) return;
+            DestroyMineVisual();
         }
 
         [ClientRpc]
@@ -173,18 +181,27 @@ namespace FrentePartido.Abilities
         {
             if (IsServer)
                 DestroyActiveMine();
+            DestroyMineVisual();
 
             base.OnNetworkDespawn();
+        }
+
+        private void DestroyMineVisual()
+        {
+            if (_activeMineVisual != null)
+                Destroy(_activeMineVisual);
+            _activeMineVisual = null;
+            _activeMineVisualId = 0;
         }
     }
 
     /// <summary>
-    /// Attached to the mine NetworkObject. Detects enemy proximity and explodes.
-    /// Server authoritative -- only server processes triggers.
+    /// Server-only trigger. Detects enemy proximity and explodes.
     /// </summary>
-    public class ProximityMine : NetworkBehaviour
+    public class ProximityMine : MonoBehaviour
     {
         private ulong _ownerClientId;
+        private ulong _mineId;
         private int _damage;
         private float _detectionRadius;
         private bool _exploded;
@@ -195,24 +212,19 @@ namespace FrentePartido.Abilities
 
         private float _spawnTime;
 
-        public void Initialize(ulong ownerClientId, int damage, float detectionRadius)
+        public void Initialize(ulong ownerClientId, ulong mineId, int damage, float detectionRadius)
         {
             _ownerClientId = ownerClientId;
+            _mineId = mineId;
             _damage = damage;
             _detectionRadius = detectionRadius;
             _exploded = false;
             _spawnTime = Time.time;
         }
 
-        public override void OnNetworkSpawn()
-        {
-            base.OnNetworkSpawn();
-            _spawnTime = Time.time;
-        }
-
         private void OnTriggerEnter2D(Collider2D other)
         {
-            if (!IsServer) return;
+            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer) return;
             if (_exploded) return;
 
             // Don't trigger during arm delay
@@ -246,13 +258,11 @@ namespace FrentePartido.Abilities
             MineAbility ownerAbility = FindOwnerAbility();
             if (ownerAbility != null)
             {
-                ownerAbility.NotifyMineExploded(NetworkObjectId);
+                ownerAbility.NotifyMineExploded(_mineId);
                 ownerAbility.ShowMineExplodedClientRpc((Vector2)transform.position);
             }
 
-            // Despawn mine
-            if (IsSpawned)
-                NetworkObject.Despawn(true);
+            Destroy(gameObject);
         }
 
         private MineAbility FindOwnerAbility()

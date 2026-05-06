@@ -305,6 +305,27 @@ namespace FrentePartido.Combat
                 PlayerHealth targetHealth = col.GetComponent<PlayerHealth>() ?? col.GetComponentInParent<PlayerHealth>();
                 if (targetHealth == _playerHealth) continue;
 
+                Component shield = col.GetComponent("ShieldDamageReceiver");
+                if (shield != null)
+                {
+                    int damage = DamageDealer.CalculateDamage(weaponData.damage);
+                    int passthrough = ProcessShieldHit(shield, damage);
+                    PlayerHealth shieldOwner = GetShieldOwnerHealth(shield);
+
+                    if (passthrough <= 0 || shieldOwner == null || shieldOwner == _playerHealth)
+                    {
+                        Debug.Log($"[Combat] Shield blocked shot for {shieldOwner?.OwnerClientId.ToString() ?? "?"}.");
+                        return;
+                    }
+
+                    if (!shieldOwner.IsDead)
+                    {
+                        shieldOwner.ApplyDamageServer(passthrough, sourceId);
+                        Debug.Log($"[Combat] Shield passthrough {passthrough} to {shieldOwner.OwnerClientId}. HP={shieldOwner.CurrentHealth.Value}");
+                    }
+                    return;
+                }
+
                 if (targetHealth != null)
                 {
                     if (targetHealth.IsDead) return;
@@ -316,6 +337,23 @@ namespace FrentePartido.Combat
 
                 if (IsBlockingHit(col)) return;
             }
+        }
+
+        private static int ProcessShieldHit(Component shield, int damage)
+        {
+            if (shield == null) return damage;
+            var method = shield.GetType().GetMethod("ProcessHit", new[] { typeof(int) });
+            if (method == null) return damage;
+
+            object result = method.Invoke(shield, new object[] { damage });
+            return result is int value ? value : damage;
+        }
+
+        private static PlayerHealth GetShieldOwnerHealth(Component shield)
+        {
+            if (shield == null) return null;
+            var prop = shield.GetType().GetProperty("OwnerHealth");
+            return prop != null ? prop.GetValue(shield) as PlayerHealth : null;
         }
 
         private RaycastHit2D FindFirstVisualHit(Vector2 origin, Vector2 direction, float range)

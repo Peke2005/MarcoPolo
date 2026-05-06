@@ -30,8 +30,13 @@ namespace FrentePartido.Abilities
         /// <param name="facingDirection">Direction the player is facing.</param>
         /// <param name="duration">How long the shield lasts (seconds).</param>
         /// <param name="damageReduction">Damage reduction percentage from AbilityDefinition.value1.</param>
-        [ServerRpc]
+        [ServerRpc(RequireOwnership = false)]
         public void ActivateServerRpc(Vector2 facingDirection, float duration, float damageReduction, ServerRpcParams rpcParams = default)
+        {
+            ActivateShieldServer(facingDirection, duration, damageReduction);
+        }
+
+        public void ActivateShieldServer(Vector2 facingDirection, float duration, float damageReduction)
         {
             if (!IsServer) return;
 
@@ -167,6 +172,7 @@ namespace FrentePartido.Abilities
         }
 
         public bool IsShieldActive => _activeShield != null && _currentShieldHp > 0;
+        public int CurrentShieldHp => _currentShieldHp;
 
         // ── Client Visuals ──────────────────────────────────────────
 
@@ -226,5 +232,7 @@ namespace FrentePartido.Abilities
             if (_owner == null) return damage;
             return _owner.AbsorbDamage(damage);
         }
+
+        public PlayerHealth OwnerHealth => _owner != null ? _owner.GetComponent<PlayerHealth>() : null;
     }
 }

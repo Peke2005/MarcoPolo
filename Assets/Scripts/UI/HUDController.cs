@@ -52,6 +52,7 @@ namespace FrentePartido.UI
         private CanvasGroup _bigOverlayCg;
         private int _lastAbilityIndex = -999;
         private bool _profileMatchRecorded;
+        private BeaconCaptureController _beacon;
 
         public void Initialize(Player.PlayerHealth health, Combat.WeaponController weapon,
                               Abilities.AbilityController ability, int maxHealth)
@@ -122,9 +123,7 @@ namespace FrentePartido.UI
                 RoundManager.Instance.OnRoundEndedAnnounced += HandleRoundEndedAnnounced;
             }
 
-            var beacon = FindAnyObjectByType<BeaconCaptureController>();
-            if (beacon != null)
-                beacon.OnBeaconStateChanged += UpdateBeaconState;
+            BindBeaconIfNeeded();
         }
 
         private void UnsubscribeFromMatch()
@@ -139,6 +138,21 @@ namespace FrentePartido.UI
                 RoundManager.Instance.OnRoundStateChanged -= HandleRoundStateChanged;
                 RoundManager.Instance.OnRoundEndedAnnounced -= HandleRoundEndedAnnounced;
             }
+            if (_beacon != null)
+            {
+                _beacon.OnBeaconStateChanged -= UpdateBeaconState;
+                _beacon = null;
+            }
+        }
+
+        private void BindBeaconIfNeeded()
+        {
+            if (_beacon != null)
+                return;
+
+            _beacon = FindAnyObjectByType<BeaconCaptureController>();
+            if (_beacon != null)
+                _beacon.OnBeaconStateChanged += UpdateBeaconState;
         }
 
         private void HandleRoundStateChanged(FrentePartido.Data.RoundState state)
@@ -357,9 +371,9 @@ namespace FrentePartido.UI
                 _roundTimer.UpdateTimer(RoundManager.Instance.RoundTimer.Value);
 
             // Update beacon capture progress
-            var beacon = FindAnyObjectByType<BeaconCaptureController>();
-            if (beacon != null && _beaconCaptureBar != null)
-                _beaconCaptureBar.fillAmount = beacon.CaptureProgress.Value;
+            BindBeaconIfNeeded();
+            if (_beacon != null && _beaconCaptureBar != null)
+                _beaconCaptureBar.fillAmount = _beacon.CaptureProgress.Value;
         }
 
         private void TryAutoBindLocalPlayer()

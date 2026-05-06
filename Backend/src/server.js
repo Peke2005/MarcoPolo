@@ -7,6 +7,12 @@ const jwt = require('jsonwebtoken');
 
 const app = express();
 app.use(express.json());
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({ error: 'JSON invalido' });
+  }
+  next(err);
+});
 
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',

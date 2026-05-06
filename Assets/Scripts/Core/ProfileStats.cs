@@ -9,6 +9,9 @@ namespace FrentePartido.Core
 {
     public static class ProfileStats
     {
+        private static Snapshot _cached;
+        private static bool _hasCache;
+
         public readonly struct Snapshot
         {
             public readonly int Matches;
@@ -29,7 +32,7 @@ namespace FrentePartido.Core
 
         public static Snapshot Load()
         {
-            return new Snapshot(0, 0, 0);
+            return _hasCache ? _cached : new Snapshot(0, 0, 0);
         }
 
         public static Task<Snapshot> FetchAsync()
@@ -80,7 +83,9 @@ namespace FrentePartido.Core
                     }
 
                     var response = JsonUtility.FromJson<StatsResponse>(request.downloadHandler.text);
-                    return new Snapshot(response.matchesPlayed, response.wins, response.losses);
+                    _cached = new Snapshot(response.matchesPlayed, response.wins, response.losses);
+                    _hasCache = true;
+                    return _cached;
                 }
                 catch (Exception e)
                 {

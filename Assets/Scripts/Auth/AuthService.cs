@@ -44,8 +44,7 @@ namespace FrentePartido.Auth
             Username = null;
             DisplayName = null;
             UserId = 0;
-            PlayerPrefs.DeleteKey("auth_token");
-            PlayerPrefs.Save();
+            ClearSavedAuth();
         }
 
         public static async Task<bool> TryAutoLogin()
@@ -69,8 +68,7 @@ namespace FrentePartido.Auth
                     {
                         if (IsConnectionFailure(request)) continue;
 
-                        PlayerPrefs.DeleteKey("auth_token");
-                        PlayerPrefs.Save();
+                        ClearSavedAuth();
                         Debug.LogWarning($"[Auth] Auto-login skipped: {DescribeRequestError(request, baseUrl)}");
                         return false;
                     }
@@ -89,9 +87,15 @@ namespace FrentePartido.Auth
                 }
             }
 
-            PlayerPrefs.DeleteKey("auth_token");
-            PlayerPrefs.Save();
+            ClearSavedAuth();
             return false;
+        }
+
+        private static void ClearSavedAuth()
+        {
+            PlayerPrefs.DeleteKey("auth_token");
+            PlayerPrefs.DeleteKey("auth_username");
+            PlayerPrefs.Save();
         }
 
         private static async Task<AuthResult> SendAuthRequest(string endpoint, string jsonBody)

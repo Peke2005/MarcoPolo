@@ -309,17 +309,15 @@ namespace FrentePartido.UI
             title.alignment = TextAlignmentOptions.Left;
             title.characterSpacing = 3;
 
-            // Buttons row
+            // Buttons row — manual anchors instead of HorizontalLayoutGroup, the
+            // layout group was sometimes collapsing children so labels disappeared.
             var row = Panel("AbRow", panel.transform, Color.clear);
             Anchors(row, 0.05f, 0.43f, 0.95f, 0.84f);
-            var hl = row.gameObject.AddComponent<HorizontalLayoutGroup>();
-            hl.spacing = 10; hl.childForceExpandWidth = true; hl.childForceExpandHeight = true;
-            hl.childControlWidth = true; hl.childControlHeight = true;
 
             _abilityHighlights = new Image[3];
-            _dashButton   = AbilityBtn(row.transform, "Dash",   AB_ICON[0], 0);
-            _shieldButton = AbilityBtn(row.transform, "Shield", AB_ICON[1], 1);
-            _mineButton   = AbilityBtn(row.transform, "Mine",   AB_ICON[2], 2);
+            _dashButton   = AbilityBtnAt(row.transform, "Dash",   AB_ICON[0], 0, 0.000f, 0.320f);
+            _shieldButton = AbilityBtnAt(row.transform, "Shield", AB_ICON[1], 1, 0.340f, 0.660f);
+            _mineButton   = AbilityBtnAt(row.transform, "Mine",   AB_ICON[2], 2, 0.680f, 1.000f);
 
             // Info strip
             var infoBg = Panel("AbInfo", panel.transform, c(0.10f, 0.11f, 0.14f));
@@ -338,15 +336,21 @@ namespace FrentePartido.UI
 
         Button AbilityBtn(Transform p, string name, string icon, int idx)
         {
+            return AbilityBtnAt(p, name, icon, idx, 0f, 1f);
+        }
+
+        Button AbilityBtnAt(Transform p, string name, string icon, int idx, float xMin, float xMax)
+        {
             var bg = Panel(name, p, BTN);
+            Anchors(bg, xMin, 0f, xMax, 1f);
             _abilityHighlights[idx] = bg.GetComponent<Image>();
             var btn = bg.gameObject.AddComponent<Button>();
 
-            var label = Txt($"{name}Lbl", bg.transform, icon, 34, FontStyles.Bold, TXT);
-            Anchors(label, 0, 0.43f, 1, 0.96f); label.alignment = TextAlignmentOptions.Center;
+            var label = Txt($"{name}Lbl", bg.transform, icon, 32, FontStyles.Bold, TXT);
+            Anchors(label, 0f, 0.45f, 1f, 0.95f); label.alignment = TextAlignmentOptions.Center;
 
             var sub = Txt($"{name}Sub", bg.transform, AB_NAME[idx], 15, FontStyles.Bold, TXT2);
-            Anchors(sub, 0.05f, 0.05f, 0.95f, 0.41f); sub.alignment = TextAlignmentOptions.Center;
+            Anchors(sub, 0.04f, 0.06f, 0.96f, 0.42f); sub.alignment = TextAlignmentOptions.Center;
 
             return btn;
         }
@@ -709,6 +713,17 @@ namespace FrentePartido.UI
             return go.GetComponent<RectTransform>();
         }
 
+        static TMP_FontAsset _cachedFont;
+        static TMP_FontAsset GetFont()
+        {
+            if (_cachedFont != null) return _cachedFont;
+            // Try the canonical TMP default first.
+            _cachedFont = Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
+            if (_cachedFont == null)
+                _cachedFont = TMP_Settings.defaultFontAsset;
+            return _cachedFont;
+        }
+
         static TMP_Text Txt(string n, Transform p, string text, float size, FontStyles style, Color col)
         {
             var go = new GameObject(n, typeof(RectTransform), typeof(TextMeshProUGUI));
@@ -716,6 +731,8 @@ namespace FrentePartido.UI
             var t = go.GetComponent<TextMeshProUGUI>();
             t.text = text; t.fontSize = size; t.fontStyle = style; t.color = col;
             t.raycastTarget = false; t.overflowMode = TextOverflowModes.Ellipsis;
+            var font = GetFont();
+            if (font != null) t.font = font;
             return t;
         }
 

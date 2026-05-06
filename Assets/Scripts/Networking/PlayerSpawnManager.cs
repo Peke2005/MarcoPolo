@@ -153,6 +153,12 @@ namespace FrentePartido.Networking
 
             _spawnedPlayers[clientId] = netObj;
 
+            // Owner-authoritative NetworkTransform: tell the new owner explicitly to
+            // snap to its spawn point. Without this, the client's own NT writes
+            // overwrite the server's initial position with the prefab's local (0,0)
+            // and the player ends up in the middle of the arena on round 1.
+            RespawnPlayerClientRpc(clientId, spawnPos);
+
             Debug.Log($"[Spawn] Spawned player for client {clientId} at {worldPos} | Faction: {faction}");
         }
 

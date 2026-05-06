@@ -246,6 +246,11 @@ namespace FrentePartido.Match
 
             var weapon = health.GetComponent<WeaponController>();
             if (weapon != null) weapon.ResetWeapon();
+
+            // Always start the round with the ability ready, regardless of who used it
+            // last round or who got killed before the cooldown wore off.
+            var ability = health.GetComponent<Abilities.AbilityController>();
+            if (ability != null) ability.ResetCooldown();
         }
 
         [ClientRpc]

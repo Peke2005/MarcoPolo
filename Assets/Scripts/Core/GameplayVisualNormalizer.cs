@@ -717,17 +717,34 @@ namespace FrentePartido.Core
             }
         }
 
+        private static Sprite _solidWhiteUISprite;
+
+        private static Sprite GetSolidWhiteUISprite()
+        {
+            if (_solidWhiteUISprite != null) return _solidWhiteUISprite;
+            var tex = new Texture2D(4, 4, TextureFormat.RGBA32, false);
+            var px = new Color[16];
+            for (int i = 0; i < 16; i++) px[i] = Color.white;
+            tex.SetPixels(px);
+            tex.Apply();
+            tex.filterMode = FilterMode.Bilinear;
+            tex.wrapMode = TextureWrapMode.Clamp;
+            _solidWhiteUISprite = Sprite.Create(tex, new Rect(0, 0, 4, 4), new Vector2(0.5f, 0.5f), 4f);
+            return _solidWhiteUISprite;
+        }
+
         private static void ConfigureFillBar(Image img, float initialFill)
         {
             if (img == null) return;
+            // CRITICAL: an Image with sprite=null renders as a flat rectangle and
+            // IGNORES fillAmount in standalone builds. Assign a runtime-generated
+            // solid sprite so Image.Type.Filled actually clips.
+            img.sprite = GetSolidWhiteUISprite();
             img.type = Image.Type.Filled;
             img.fillMethod = Image.FillMethod.Horizontal;
             img.fillOrigin = (int)Image.OriginHorizontal.Left;
             img.fillAmount = initialFill;
-            // Ensure a non-null sprite — Image.Filled with no sprite renders as a flat
-            // rect that ignores fillAmount on some Unity builds.
-            if (img.sprite == null)
-                img.sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/UISprite.psd");
+            img.preserveAspect = false;
         }
 
         private static void AnchorTopLeft(GameObject hud, string childName, Vector2 anchoredPos, TMPro.TextAlignmentOptions align)

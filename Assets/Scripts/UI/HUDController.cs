@@ -2,6 +2,8 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using System.Collections;
+using Unity.Netcode;
+using FrentePartido.Core;
 using FrentePartido.Data;
 using FrentePartido.Match;
 
@@ -49,6 +51,7 @@ namespace FrentePartido.UI
         private Coroutine _bigOverlayCoroutine;
         private CanvasGroup _bigOverlayCg;
         private int _lastAbilityIndex = -999;
+        private bool _profileMatchRecorded;
 
         public void Initialize(Player.PlayerHealth health, Combat.WeaponController weapon,
                               Abilities.AbilityController ability, int maxHealth)
@@ -300,6 +303,13 @@ namespace FrentePartido.UI
 
         private void HandleMatchWon(ulong winnerClientId)
         {
+            if (!_profileMatchRecorded)
+            {
+                _profileMatchRecorded = true;
+                ulong localClientId = NetworkManager.Singleton != null ? NetworkManager.Singleton.LocalClientId : ulong.MaxValue;
+                ProfileStats.RecordMatch(winnerClientId == localClientId);
+            }
+
             int p1 = MatchManager.Instance != null ? MatchManager.Instance.Player1Score.Value : 0;
             int p2 = MatchManager.Instance != null ? MatchManager.Instance.Player2Score.Value : 0;
             ShowBigOverlay(

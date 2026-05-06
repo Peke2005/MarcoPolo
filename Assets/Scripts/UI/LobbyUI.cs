@@ -41,8 +41,16 @@ namespace FrentePartido.UI
         [SerializeField] private Button _readyButton;
         [SerializeField] private Button _startGameButton;
         [SerializeField] private Button _leaveButton;
+        [SerializeField] private Button _profileButton;
         [SerializeField] private TMP_Text _readyButtonText;
         [SerializeField] private Image _readyButtonBg;
+        [SerializeField] private GameObject _profilePanelRoot;
+        [SerializeField] private TMP_Text _profileNameText;
+        [SerializeField] private TMP_Text _profileRankText;
+        [SerializeField] private TMP_Text _profileMatchesText;
+        [SerializeField] private TMP_Text _profileWinsText;
+        [SerializeField] private TMP_Text _profileLossesText;
+        [SerializeField] private TMP_Text _profileWinRateText;
 
         // ── State ───────────────────────────────────────────
         private bool _isReady;
@@ -164,6 +172,7 @@ namespace FrentePartido.UI
             BuildPlayers(main.transform);
             BuildLoadout(main.transform);
             BuildActions(main.transform);
+            BuildProfilePanel(bg.transform);
         }
 
         // ── HEADER ──────────────────────────────────────────
@@ -279,7 +288,7 @@ namespace FrentePartido.UI
 
         void BuildLoadout(Transform p)
         {
-            var section = LayoutRow("Loadout", p, 210);
+            var section = LayoutRow("Loadout", p, 275);
             var cols = Panel("Cols", section.transform, Color.clear);
             Stretch(cols);
             var hl = cols.gameObject.AddComponent<HorizontalLayoutGroup>();
@@ -295,14 +304,14 @@ namespace FrentePartido.UI
         {
             var panel = Panel("AbPanel", p, CARD);
 
-            var title = Txt("AbTitle", panel.transform, "HABILIDAD", 11, FontStyles.Bold, MUTED);
-            Anchors(title, 0.06f, 0.89f, 0.95f, 0.99f);
+            var title = Txt("AbTitle", panel.transform, "HABILIDAD", 17, FontStyles.Bold, MUTED);
+            Anchors(title, 0.05f, 0.88f, 0.95f, 0.98f);
             title.alignment = TextAlignmentOptions.Left;
             title.characterSpacing = 3;
 
             // Buttons row
             var row = Panel("AbRow", panel.transform, Color.clear);
-            Anchors(row, 0.05f, 0.48f, 0.95f, 0.87f);
+            Anchors(row, 0.05f, 0.43f, 0.95f, 0.84f);
             var hl = row.gameObject.AddComponent<HorizontalLayoutGroup>();
             hl.spacing = 10; hl.childForceExpandWidth = true; hl.childForceExpandHeight = true;
             hl.childControlWidth = true; hl.childControlHeight = true;
@@ -314,16 +323,16 @@ namespace FrentePartido.UI
 
             // Info strip
             var infoBg = Panel("AbInfo", panel.transform, c(0.10f, 0.11f, 0.14f));
-            Anchors(infoBg, 0.05f, 0.06f, 0.95f, 0.44f);
+            Anchors(infoBg, 0.05f, 0.06f, 0.95f, 0.38f);
 
             _selectedAbilityText = Txt("AbName", infoBg.transform, AB_ICON[0] + "  " + AB_NAME[0],
-                16, FontStyles.Bold, YELLOW);
-            Anchors(_selectedAbilityText, 0.04f, 0.52f, 0.96f, 0.95f);
+                24, FontStyles.Bold, YELLOW);
+            Anchors(_selectedAbilityText, 0.04f, 0.48f, 0.96f, 0.95f);
             _selectedAbilityText.alignment = TextAlignmentOptions.Left;
 
             _selectedAbilityDesc = Txt("AbDesc", infoBg.transform, AB_DESC[0],
-                12, FontStyles.Normal, TXT2);
-            Anchors(_selectedAbilityDesc, 0.04f, 0.08f, 0.96f, 0.52f);
+                17, FontStyles.Normal, TXT2);
+            Anchors(_selectedAbilityDesc, 0.04f, 0.06f, 0.96f, 0.48f);
             _selectedAbilityDesc.alignment = TextAlignmentOptions.TopLeft;
         }
 
@@ -333,11 +342,11 @@ namespace FrentePartido.UI
             _abilityHighlights[idx] = bg.GetComponent<Image>();
             var btn = bg.gameObject.AddComponent<Button>();
 
-            var label = Txt($"{name}Lbl", bg.transform, icon, 24, FontStyles.Bold, TXT);
-            Anchors(label, 0, 0.42f, 1, 0.96f); label.alignment = TextAlignmentOptions.Center;
+            var label = Txt($"{name}Lbl", bg.transform, icon, 34, FontStyles.Bold, TXT);
+            Anchors(label, 0, 0.43f, 1, 0.96f); label.alignment = TextAlignmentOptions.Center;
 
-            var sub = Txt($"{name}Sub", bg.transform, AB_NAME[idx], 10, FontStyles.Bold, TXT2);
-            Anchors(sub, 0.05f, 0.05f, 0.95f, 0.42f); sub.alignment = TextAlignmentOptions.Center;
+            var sub = Txt($"{name}Sub", bg.transform, AB_NAME[idx], 15, FontStyles.Bold, TXT2);
+            Anchors(sub, 0.05f, 0.05f, 0.95f, 0.41f); sub.alignment = TextAlignmentOptions.Center;
 
             return btn;
         }
@@ -388,6 +397,7 @@ namespace FrentePartido.UI
 
             // Leave
             _leaveButton = ActionBtn(row.transform, "Leave", "SALIR", DANGER, 110);
+            _profileButton = ActionBtn(row.transform, "Profile", "PERFIL", CODE_BG, 130);
 
             // Spacer
             var sp = new GameObject("Sp", typeof(RectTransform), typeof(LayoutElement));
@@ -408,6 +418,71 @@ namespace FrentePartido.UI
             _startGameButton = startBg.gameObject.AddComponent<Button>();
             var startTxt = Txt("StartTxt", startBg.transform, "INICIAR", 17, FontStyles.Bold, Color.white);
             Stretch(startTxt); startTxt.alignment = TextAlignmentOptions.Center;
+        }
+
+        void BuildProfilePanel(Transform p)
+        {
+            var overlay = Panel("ProfileOverlay", p, new Color(0f, 0f, 0f, 0.66f));
+            Stretch(overlay);
+            _profilePanelRoot = overlay.gameObject;
+
+            var card = Panel("ProfileCard", overlay.transform, c(0.09f, 0.11f, 0.13f));
+            Anchors(card, 0.27f, 0.16f, 0.73f, 0.84f);
+
+            var accent = Panel("ProfileAccent", card.transform, ACCENT);
+            Anchors(accent, 0f, 0.94f, 1f, 1f);
+
+            var title = Txt("ProfileTitle", card.transform, "PERFIL", 34, FontStyles.Bold, TXT);
+            Anchors(title, 0.06f, 0.80f, 0.58f, 0.93f);
+            title.alignment = TextAlignmentOptions.Left;
+            title.characterSpacing = 6;
+
+            _profileNameText = Txt("ProfileName", card.transform, "Jugador", 16, FontStyles.Bold, TXT2);
+            Anchors(_profileNameText, 0.06f, 0.72f, 0.58f, 0.80f);
+            _profileNameText.alignment = TextAlignmentOptions.Left;
+
+            var rankBox = Panel("RankBox", card.transform, c(0.13f, 0.17f, 0.14f));
+            Anchors(rankBox, 0.62f, 0.73f, 0.94f, 0.90f);
+            var rankLabel = Txt("RankLabel", rankBox.transform, "RANGO", 11, FontStyles.Bold, MUTED);
+            Anchors(rankLabel, 0.08f, 0.60f, 0.92f, 0.92f);
+            rankLabel.alignment = TextAlignmentOptions.Left;
+            _profileRankText = Txt("RankValue", rankBox.transform, "SIN RANGO", 22, FontStyles.Bold, ACCENT);
+            Anchors(_profileRankText, 0.08f, 0.08f, 0.92f, 0.62f);
+            _profileRankText.alignment = TextAlignmentOptions.Left;
+
+            BuildProfileStat(card.transform, "Matches", "PARTIDAS", out _profileMatchesText, 0.06f, 0.48f, 0.47f, 0.67f, BLUE);
+            BuildProfileStat(card.transform, "Wins", "VICTORIAS", out _profileWinsText, 0.53f, 0.48f, 0.94f, 0.67f, GREEN);
+            BuildProfileStat(card.transform, "Losses", "DERROTAS", out _profileLossesText, 0.06f, 0.25f, 0.47f, 0.44f, RED);
+            BuildProfileStat(card.transform, "WinRate", "WINRATE", out _profileWinRateText, 0.53f, 0.25f, 0.94f, 0.44f, ACCENT);
+
+            var note = Txt("ProfileNote", card.transform, "Stats guardadas en este PC. Sube al terminar cada partida.", 14, FontStyles.Normal, TXT2);
+            Anchors(note, 0.06f, 0.15f, 0.94f, 0.23f);
+            note.alignment = TextAlignmentOptions.Center;
+
+            var closeBg = Panel("ProfileClose", card.transform, DANGER);
+            Anchors(closeBg, 0.34f, 0.04f, 0.66f, 0.13f);
+            var close = closeBg.gameObject.AddComponent<Button>();
+            var closeTxt = Txt("ProfileCloseTxt", closeBg.transform, "CERRAR", 15, FontStyles.Bold, Color.white);
+            Stretch(closeTxt);
+            closeTxt.alignment = TextAlignmentOptions.Center;
+            close.onClick.AddListener(HideProfilePanel);
+
+            HideProfilePanel();
+        }
+
+        void BuildProfileStat(Transform p, string name, string label, out TMP_Text valueText,
+                              float xMin, float yMin, float xMax, float yMax, Color accentColor)
+        {
+            var box = Panel(name, p, c(0.14f, 0.16f, 0.20f));
+            Anchors(box, xMin, yMin, xMax, yMax);
+            var stripe = Panel(name + "Stripe", box.transform, accentColor);
+            Anchors(stripe, 0f, 0f, 0.035f, 1f);
+            var labelText = Txt(name + "Label", box.transform, label, 12, FontStyles.Bold, MUTED);
+            Anchors(labelText, 0.10f, 0.62f, 0.92f, 0.90f);
+            labelText.alignment = TextAlignmentOptions.Left;
+            valueText = Txt(name + "Value", box.transform, "0", 30, FontStyles.Bold, TXT);
+            Anchors(valueText, 0.10f, 0.08f, 0.92f, 0.62f);
+            valueText.alignment = TextAlignmentOptions.Left;
         }
 
         Button ActionBtn(Transform p, string name, string label, Color bg, float w)
@@ -434,7 +509,33 @@ namespace FrentePartido.UI
             _readyButton?.onClick.AddListener(ToggleReady);
             _startGameButton?.onClick.AddListener(OnStartGame);
             _leaveButton?.onClick.AddListener(OnLeave);
+            _profileButton?.onClick.AddListener(ShowProfilePanel);
             _copyCodeButton?.onClick.AddListener(CopyCodeToClipboard);
+        }
+
+        void ShowProfilePanel()
+        {
+            var stats = ProfileStats.Load();
+            if (_profileNameText != null)
+                _profileNameText.text = GameConfig.Preferences.playerName ?? "Jugador";
+            if (_profileRankText != null)
+                _profileRankText.text = stats.Rank;
+            if (_profileMatchesText != null)
+                _profileMatchesText.text = stats.Matches.ToString();
+            if (_profileWinsText != null)
+                _profileWinsText.text = stats.Wins.ToString();
+            if (_profileLossesText != null)
+                _profileLossesText.text = stats.Losses.ToString();
+            if (_profileWinRateText != null)
+                _profileWinRateText.text = $"{stats.WinRate:0}%";
+            if (_profilePanelRoot != null)
+                _profilePanelRoot.SetActive(true);
+        }
+
+        void HideProfilePanel()
+        {
+            if (_profilePanelRoot != null)
+                _profilePanelRoot.SetActive(false);
         }
 
         void UpdateJoinCode()

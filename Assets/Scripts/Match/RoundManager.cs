@@ -20,6 +20,10 @@ namespace FrentePartido.Match
         public event Action<ulong> OnRoundWon;
         public event Action OnRoundStarting;
 
+        /// <summary>Fires on every client when a round winner is announced. Carries the
+        /// winner clientId so HUDs can render a pretty banner immediately.</summary>
+        public event Action<ulong> OnRoundEndedAnnounced;
+
         private BeaconCaptureController _beacon;
         private SuddenDeathController _suddenDeath;
         private Player.PlayerHealth _player1Health;
@@ -268,6 +272,7 @@ namespace FrentePartido.Match
         private void AnnounceRoundWinnerClientRpc(ulong winnerClientId)
         {
             Debug.Log($"[Round] Round won by {winnerClientId}");
+            OnRoundEndedAnnounced?.Invoke(winnerClientId);
         }
 
         [ClientRpc]

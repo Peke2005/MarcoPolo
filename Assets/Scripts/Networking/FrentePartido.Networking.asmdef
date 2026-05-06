@@ -7,6 +7,7 @@
         "FrentePartido.Player",
         "FrentePartido.Combat",
         "Unity.Netcode.Runtime",
+        "Unity.Netcode.Components",
         "Unity.Services.Core",
         "Unity.Services.Authentication",
         "Unity.Services.Relay",

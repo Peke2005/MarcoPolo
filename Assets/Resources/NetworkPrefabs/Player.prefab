@@ -225,9 +225,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 4731996382612076676}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e96cb6065543e43c4a752faaa1468eb1, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  m_Script: {fileID: 11500000, guid: 9b4c8a2e7d1f4a90b9876a14b3c77100, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
   UseUnreliableDeltas: 0
   SyncPositionX: 1
   SyncPositionY: 1

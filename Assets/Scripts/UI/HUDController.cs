@@ -42,6 +42,12 @@ namespace FrentePartido.UI
         private Abilities.AbilityController _localAbility;
         private int _maxHealth;
         private Coroutine _reloadBarCoroutine;
+        private GameObject _bigOverlay;
+        private TMP_Text _bigOverlayTitle;
+        private TMP_Text _bigOverlayScore;
+        private TMP_Text _bigOverlayCountdown;
+        private Coroutine _bigOverlayCoroutine;
+        private CanvasGroup _bigOverlayCg;
 
         public void Initialize(Player.PlayerHealth health, Combat.WeaponController weapon,
                               Abilities.AbilityController ability, int maxHealth)
@@ -101,7 +107,10 @@ namespace FrentePartido.UI
                 MatchManager.Instance.OnMatchWon += HandleMatchWon;
             }
             if (RoundManager.Instance != null)
+            {
                 RoundManager.Instance.OnRoundStateChanged += HandleRoundStateChanged;
+                RoundManager.Instance.OnRoundEndedAnnounced += HandleRoundEndedAnnounced;
+            }
 
             var beacon = FindAnyObjectByType<BeaconCaptureController>();
             if (beacon != null)
@@ -116,7 +125,10 @@ namespace FrentePartido.UI
                 MatchManager.Instance.OnMatchWon -= HandleMatchWon;
             }
             if (RoundManager.Instance != null)
+            {
                 RoundManager.Instance.OnRoundStateChanged -= HandleRoundStateChanged;
+                RoundManager.Instance.OnRoundEndedAnnounced -= HandleRoundEndedAnnounced;
+            }
         }
 
         private void HandleRoundStateChanged(FrentePartido.Data.RoundState state)
@@ -127,20 +139,168 @@ namespace FrentePartido.UI
                 ShowAnnouncement("PELEAD", 1.5f);
         }
 
-        private void HandleMatchWon(ulong winnerClientId)
+        private void HandleRoundEndedAnnounced(ulong winnerClientId)
         {
-            string winnerLabel = "EMPATE";
-            var gs = FrentePartido.Networking.NetworkGameState.Instance;
-            if (gs != null)
-            {
-                if (winnerClientId == gs.Player1ClientId.Value) winnerLabel = "AZUL";
-                else if (winnerClientId == gs.Player2ClientId.Value) winnerLabel = "ROJO";
-            }
-
+            string label = ResolveFactionLabel(winnerClientId);
             int p1 = MatchManager.Instance != null ? MatchManager.Instance.Player1Score.Value : 0;
             int p2 = MatchManager.Instance != null ? MatchManager.Instance.Player2Score.Value : 0;
-            ShowAnnouncement($"GANA {winnerLabel}  {p1} - {p2}", 6f);
+            // Score from MatchManager hasn't incremented yet at this point (server adds the
+            // point after the round-end delay). Bump the winner side locally for the banner.
+            if (winnerClientId == ResolvePlayerSlotId(1)) p1++;
+            else if (winnerClientId == ResolvePlayerSlotId(2)) p2++;
 
+            float countdown = 4f;
+            ShowBigOverlay(
+                $"GANA {label}",
+                $"{p1} - {p2}",
+                countdown,
+                false,
+                FactionColor(winnerClientId));
+        }
+
+        private static ulong ResolvePlayerSlotId(int slot)
+        {
+            var gs = FrentePartido.Networking.NetworkGameState.Instance;
+            if (gs == null) return ulong.MaxValue;
+            return slot == 1 ? gs.Player1ClientId.Value : gs.Player2ClientId.Value;
+        }
+
+        private static string ResolveFactionLabel(ulong clientId)
+        {
+            var gs = FrentePartido.Networking.NetworkGameState.Instance;
+            if (gs == null) return "?";
+            if (clientId == gs.Player1ClientId.Value) return "AZUL";
+            if (clientId == gs.Player2ClientId.Value) return "ROJO";
+            return "?";
+        }
+
+        private static Color FactionColor(ulong clientId)
+        {
+            var gs = FrentePartido.Networking.NetworkGameState.Instance;
+            if (gs == null) return new Color(1f, 0.85f, 0.25f, 1f);
+            if (clientId == gs.Player1ClientId.Value) return new Color(0.30f, 0.55f, 1.00f, 1f);
+            if (clientId == gs.Player2ClientId.Value) return new Color(1.00f, 0.32f, 0.28f, 1f);
+            return new Color(1f, 0.85f, 0.25f, 1f);
+        }
+
+        private void EnsureBigOverlay()
+        {
+            if (_bigOverlay != null) return;
+
+            var canvasRT = transform as RectTransform;
+            if (canvasRT == null) canvasRT = GetComponent<RectTransform>();
+            if (canvasRT == null) return;
+
+            var go = new GameObject("BigOverlay", typeof(RectTransform), typeof(CanvasGroup), typeof(UnityEngine.UI.Image));
+            go.transform.SetParent(canvasRT, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            go.transform.SetAsLastSibling();
+            _bigOverlay = go;
+            _bigOverlayCg = go.GetComponent<CanvasGroup>();
+            _bigOverlayCg.alpha = 0f;
+            _bigOverlayCg.blocksRaycasts = false;
+            var dim = go.GetComponent<UnityEngine.UI.Image>();
+            dim.color = new Color(0f, 0f, 0f, 0.55f);
+            dim.raycastTarget = false;
+
+            _bigOverlayTitle = AddOverlayText(rt, "Title", "", 92, FontStyles.Bold, new Vector2(0f, 0.55f), new Vector2(1f, 0.78f));
+            _bigOverlayScore = AddOverlayText(rt, "Score", "", 56, FontStyles.Bold, new Vector2(0f, 0.40f), new Vector2(1f, 0.55f));
+            _bigOverlayCountdown = AddOverlayText(rt, "Countdown", "", 28, FontStyles.Normal, new Vector2(0f, 0.27f), new Vector2(1f, 0.38f));
+            _bigOverlayCountdown.color = new Color(0.92f, 0.94f, 0.92f, 0.85f);
+            _bigOverlayTitle.characterSpacing = 8f;
+            _bigOverlayScore.characterSpacing = 12f;
+
+            go.SetActive(false);
+        }
+
+        private static TMP_Text AddOverlayText(RectTransform parent, string name, string value, float size, FontStyles style, Vector2 anchorMin, Vector2 anchorMax)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(TextMeshProUGUI));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var t = go.GetComponent<TextMeshProUGUI>();
+            t.text = value;
+            t.fontSize = size;
+            t.fontStyle = style;
+            t.alignment = TextAlignmentOptions.Center;
+            t.color = Color.white;
+            t.raycastTarget = false;
+            return t;
+        }
+
+        public void ShowBigOverlay(string title, string score, float countdownSeconds, bool isMatchEnd, Color titleColor)
+        {
+            EnsureBigOverlay();
+            if (_bigOverlay == null) return;
+
+            _bigOverlay.SetActive(true);
+            if (_bigOverlayTitle != null)
+            {
+                _bigOverlayTitle.text = title;
+                _bigOverlayTitle.color = titleColor;
+            }
+            if (_bigOverlayScore != null)
+                _bigOverlayScore.text = score;
+
+            if (_bigOverlayCoroutine != null) StopCoroutine(_bigOverlayCoroutine);
+            _bigOverlayCoroutine = StartCoroutine(BigOverlayRoutine(countdownSeconds, isMatchEnd));
+        }
+
+        private IEnumerator BigOverlayRoutine(float duration, bool persistAfter)
+        {
+            // Fade in
+            float t = 0f;
+            while (t < 0.3f)
+            {
+                t += Time.deltaTime;
+                if (_bigOverlayCg != null) _bigOverlayCg.alpha = Mathf.Clamp01(t / 0.3f);
+                yield return null;
+            }
+            if (_bigOverlayCg != null) _bigOverlayCg.alpha = 1f;
+
+            // Countdown
+            float remaining = duration;
+            while (remaining > 0f)
+            {
+                if (_bigOverlayCountdown != null)
+                {
+                    int secs = Mathf.CeilToInt(remaining);
+                    _bigOverlayCountdown.text = persistAfter
+                        ? $"Volviendo al menu en {secs}..."
+                        : $"Proxima ronda en {secs}...";
+                }
+                remaining -= Time.deltaTime;
+                yield return null;
+            }
+
+            if (persistAfter) yield break;
+
+            // Fade out for round transitions
+            t = 0f;
+            while (t < 0.3f)
+            {
+                t += Time.deltaTime;
+                if (_bigOverlayCg != null) _bigOverlayCg.alpha = 1f - Mathf.Clamp01(t / 0.3f);
+                yield return null;
+            }
+            if (_bigOverlayCg != null) _bigOverlayCg.alpha = 0f;
+            if (_bigOverlay != null) _bigOverlay.SetActive(false);
+        }
+
+        private void HandleMatchWon(ulong winnerClientId)
+        {
+            int p1 = MatchManager.Instance != null ? MatchManager.Instance.Player1Score.Value : 0;
+            int p2 = MatchManager.Instance != null ? MatchManager.Instance.Player2Score.Value : 0;
+            ShowBigOverlay(
+                $"VICTORIA {ResolveFactionLabel(winnerClientId)}",
+                $"{p1} - {p2}",
+                7f,
+                true,
+                FactionColor(winnerClientId));
             StartCoroutine(ReturnToMenuAfter(7f));
         }
 
@@ -156,6 +316,20 @@ namespace FrentePartido.UI
             // called from anywhere else, so without this the HUD never reflects state.
             if (_localHealth == null)
                 TryAutoBindLocalPlayer();
+
+            // Defensive per-frame push of HP/armor/ammo. NetworkVariable.OnValueChanged
+            // is the source of truth, but on rare timing edge cases the event handler
+            // can miss the very first tick after auto-bind, leaving the bars stale.
+            // This makes sure the visual always reflects the authoritative value.
+            if (_localHealth != null)
+            {
+                UpdateHealth(_localHealth.CurrentHealth.Value, _maxHealth);
+                UpdateArmor(_localHealth.CurrentArmor.Value);
+            }
+            if (_localWeapon != null && _localWeapon.GrenadesRemaining != null)
+            {
+                UpdateGrenadeCount(_localWeapon.GrenadesRemaining.Value);
+            }
 
             // Update timer from RoundManager
             if (RoundManager.Instance != null && _roundTimer != null)

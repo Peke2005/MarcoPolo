@@ -141,6 +141,21 @@ namespace FrentePartido.UI
             }
 
             PublishLobbyState();
+            // Re-publish a few times in the first seconds. The first SendLocalLobbyInfo
+            // can be lost if the NGO connection isn't fully ready yet, leaving the
+            // server with the EnsureLobbyPlayer fallback name ("Jugador 3") and
+            // IsReady=false even after the joiner toggles LISTO.
+            StartCoroutine(RepublishBootstrap());
+        }
+
+        private System.Collections.IEnumerator RepublishBootstrap()
+        {
+            float[] delays = { 0.4f, 1.0f, 2.0f, 4.0f };
+            for (int i = 0; i < delays.Length; i++)
+            {
+                yield return new WaitForSeconds(delays[i]);
+                PublishLobbyState();
+            }
         }
 
         private void Update()

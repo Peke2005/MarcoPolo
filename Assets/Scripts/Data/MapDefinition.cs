@@ -13,6 +13,26 @@ namespace FrentePartido.Data
         public Vector2 spawnPointA = new Vector2(-8f, 0f);
         public Vector2 spawnPointB = new Vector2(8f, 0f);
 
+        [Header("Deathmatch Spawn Points")]
+        [Tooltip("Up to 10 spawn anchors used for deathmatch. The active set scales with player count so 2 players spawn far apart, 10 players use the full ring.")]
+        public Vector2[] deathmatchSpawnPoints = new Vector2[]
+        {
+            new Vector2(-18f,   8f),
+            new Vector2( 18f,  -8f),
+            new Vector2(-18f,  -8f),
+            new Vector2( 18f,   8f),
+            new Vector2(  0f,  10f),
+            new Vector2(  0f, -10f),
+            new Vector2(-12f,   0f),
+            new Vector2( 12f,   0f),
+            new Vector2(-18f,   0f),
+            new Vector2( 18f,   0f),
+        };
+
+        [Header("Deathmatch Bounds")]
+        public Vector2 deathmatchBoundsMin = new Vector2(-21f, -12.5f);
+        public Vector2 deathmatchBoundsMax = new Vector2( 21f,  12.5f);
+
         [Header("Beacon")]
         public Vector2 beaconPosition = Vector2.zero;
 

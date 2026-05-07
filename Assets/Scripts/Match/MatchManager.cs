@@ -165,12 +165,19 @@ namespace FrentePartido.Match
             }
         }
 
+        public byte FinalP1Score { get; private set; }
+        public byte FinalP2Score { get; private set; }
+
         private void EndMatch(ulong winnerClientId)
         {
             State.Value = MatchState.PostMatch;
+            byte p1 = IsDeathmatch ? Player1Kills.Value : Player1Score.Value;
+            byte p2 = IsDeathmatch ? Player2Kills.Value : Player2Score.Value;
+            FinalP1Score = p1;
+            FinalP2Score = p2;
             OnMatchWon?.Invoke(winnerClientId);
-            NotifyMatchEndClientRpc(winnerClientId, Player1Score.Value, Player2Score.Value);
-            Debug.Log($"[Match] Match won by {winnerClientId}");
+            NotifyMatchEndClientRpc(winnerClientId, p1, p2);
+            Debug.Log($"[Match] Match won by {winnerClientId} | Final {p1}-{p2}");
         }
 
         [ClientRpc]
@@ -182,6 +189,11 @@ namespace FrentePartido.Match
         [ClientRpc]
         private void NotifyMatchEndClientRpc(ulong winnerClientId, byte p1Score, byte p2Score)
         {
+            // Pass the final values authoritatively. NetworkVariable updates can race
+            // the ClientRpc, so the client could read 19 instead of 20 if the last
+            // kill's NV write hadn't replicated yet when the overlay opened.
+            FinalP1Score = p1Score;
+            FinalP2Score = p2Score;
             OnMatchWon?.Invoke(winnerClientId);
         }
 

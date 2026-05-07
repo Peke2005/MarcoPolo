@@ -312,11 +312,36 @@ namespace FrentePartido.Networking
                    NetworkSessionManager.Instance.SelectedGameMode == GameMode.Deathmatch;
         }
 
-        private static Vector2 GetDeathmatchSpawn(int slotIndex)
+        // Static visualization helper used by the arena builder ClientRpc to show all
+        // 10 spawn markers regardless of current player count.
+        private static Vector2 GetDeathmatchSpawnVisual(int slotIndex)
         {
-            int slot = Mathf.Max(0, slotIndex);
+            int slot = Mathf.Clamp(slotIndex, 0, 9);
             float angle = (Mathf.PI * 2f * slot) / 10f;
             return new Vector2(Mathf.Cos(angle) * 16.5f, Mathf.Sin(angle) * 9.0f);
+        }
+
+        private Vector2 GetDeathmatchSpawn(int slotIndex)
+        {
+            // Use the curated DeathmatchSpawnPoints from the map when present, picking
+            // the entries that spread the actual player count apart instead of always
+            // dividing by 10 (which put 2 players almost on top of each other).
+            int total = Mathf.Max(2, _joinOrder.Count);
+            int slot = Mathf.Clamp(slotIndex, 0, total - 1);
+
+            if (_mapDefinition != null && _mapDefinition.deathmatchSpawnPoints != null && _mapDefinition.deathmatchSpawnPoints.Length >= 2)
+            {
+                var pts = _mapDefinition.deathmatchSpawnPoints;
+                int len = pts.Length;
+                int picked = (slot * len) / total; // even stride across the array
+                return pts[Mathf.Clamp(picked, 0, len - 1)];
+            }
+
+            // Procedural fallback: ring scaled by actual player count, larger radius
+            // for the bigger deathmatch arena.
+            float angle = (Mathf.PI * 2f * slot) / total;
+            float radius = total <= 2 ? 16.5f : Mathf.Lerp(16.5f, 18f, (total - 2) / 8f);
+            return new Vector2(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * 9.0f);
         }
 
         [ClientRpc]
@@ -341,7 +366,7 @@ namespace FrentePartido.Networking
 
             for (int i = 0; i < 10; i++)
             {
-                Vector2 p = GetDeathmatchSpawn(i);
+                Vector2 p = GetDeathmatchSpawnVisual(i);
                 AddPiece(root, "DM_Spawn_" + i, p, new Vector2(1.7f, 1.7f),
                     i % 2 == 0 ? new Color(0.2f, 0.55f, 1f, 0.55f) : new Color(1f, 0.3f, 0.25f, 0.55f),
                     false, -50);

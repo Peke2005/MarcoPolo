@@ -336,13 +336,11 @@ namespace FrentePartido.UI
                 _ = ProfileStats.RecordMatchAsync(winnerClientId == localClientId);
             }
 
-            int p1 = MatchManager.Instance != null ? MatchManager.Instance.Player1Score.Value : 0;
-            int p2 = MatchManager.Instance != null ? MatchManager.Instance.Player2Score.Value : 0;
-            if (MatchManager.Instance != null && MatchManager.Instance.IsDeathmatch)
-            {
-                p1 = MatchManager.Instance.Player1Kills.Value;
-                p2 = MatchManager.Instance.Player2Kills.Value;
-            }
+            // Use the authoritative final scores cached when the match-end ClientRpc
+            // arrived. Reading Player1Score/Player1Kills directly here can lag a
+            // frame behind the RPC, so the loser would see 19-19 instead of 20-19.
+            int p1 = MatchManager.Instance != null ? MatchManager.Instance.FinalP1Score : 0;
+            int p2 = MatchManager.Instance != null ? MatchManager.Instance.FinalP2Score : 0;
             ShowBigOverlay(
                 $"VICTORIA {ResolveFactionLabel(winnerClientId)}",
                 $"{p1} - {p2}",

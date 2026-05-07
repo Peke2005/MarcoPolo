@@ -154,12 +154,16 @@ namespace FrentePartido.Player
             Vector2 currentPos = _rb != null ? _rb.position : (Vector2)transform.position;
             Vector2 delta = moveDir * speed * deltaTime;
 
-            // Clamp to map bounds if available
+            // Clamp to map bounds if available. Deathmatch arena is much larger than
+            // the 1v1 box, so use the active mode's bounds — otherwise DM spawns
+            // outside (-12,-7)..(12,7) get pinned in a corner and can't move.
             if (mapDefinition != null)
             {
                 Vector2 clampedPos = currentPos + delta;
-                clampedPos.x = Mathf.Clamp(clampedPos.x, mapDefinition.boundsMin.x, mapDefinition.boundsMax.x);
-                clampedPos.y = Mathf.Clamp(clampedPos.y, mapDefinition.boundsMin.y, mapDefinition.boundsMax.y);
+                Vector2 min = RuntimeMatchSettings.Mode == GameMode.Deathmatch ? RuntimeMatchSettings.BoundsMin : mapDefinition.boundsMin;
+                Vector2 max = RuntimeMatchSettings.Mode == GameMode.Deathmatch ? RuntimeMatchSettings.BoundsMax : mapDefinition.boundsMax;
+                clampedPos.x = Mathf.Clamp(clampedPos.x, min.x, max.x);
+                clampedPos.y = Mathf.Clamp(clampedPos.y, min.y, max.y);
                 delta = clampedPos - currentPos;
             }
 

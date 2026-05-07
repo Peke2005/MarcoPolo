@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -67,6 +68,17 @@ namespace FrentePartido.UI
         private float _copyTimer;
         private float _lobbyRefreshTimer;
         private bool _refreshingLobby;
+
+        private struct PlayerSlot
+        {
+            public Image Bg;
+            public TMP_Text Name;
+            public TMP_Text Status;
+        }
+        private readonly List<PlayerSlot> _playerSlots = new List<PlayerSlot>();
+        private Transform _playersContainer;
+        private GameMode _builtSlotsForMode = (GameMode)255;
+        private int _builtSlotsCount = -1;
 
         // ── Theme ───────────────────────────────────────────
         static readonly Color BG        = c(0.06f, 0.07f, 0.10f);
@@ -239,40 +251,108 @@ namespace FrentePartido.UI
 
             var cards = Panel("Cards", section.transform, Color.clear);
             Anchors(cards, 0, 0, 1, 0.87f);
-            var hl = cards.gameObject.AddComponent<HorizontalLayoutGroup>();
-            hl.spacing = 12; hl.childForceExpandWidth = true; hl.childForceExpandHeight = true;
-            hl.childControlWidth = true; hl.childControlHeight = true;
+            _playersContainer = cards.transform;
 
-            // VS text in middle
-            BuildPlayerCard(cards.transform, "P1", true,
-                out _player1NameText, out _player1StatusText, out _player1CardBg);
+            // Slots are built lazily by RebuildPlayerSlots() which runs whenever the
+            // mode (or current player count) changes. This way deathmatch can grow
+            // up to 10 cards instead of being stuck at the hardcoded 2.
+            RebuildPlayerSlots(2);
+        }
 
-            // VS separator
-            var vs = new GameObject("VS", typeof(RectTransform), typeof(LayoutElement));
-            vs.transform.SetParent(cards.transform, false);
-            vs.GetComponent<LayoutElement>().preferredWidth = 40;
-            vs.GetComponent<LayoutElement>().flexibleWidth = 0;
-            var vsTxt = Txt("VSTxt", vs.transform, "VS", 20, FontStyles.Bold, MUTED);
-            Stretch(vsTxt); vsTxt.alignment = TextAlignmentOptions.Center;
+        private void RebuildPlayerSlots(int count)
+        {
+            if (_playersContainer == null) return;
+            count = Mathf.Clamp(count, 2, 10);
+            if (_builtSlotsForMode == _selectedMode && _builtSlotsCount == count) return;
 
-            BuildPlayerCard(cards.transform, "P2", false,
-                out _player2NameText, out _player2StatusText, out _player2CardBg);
+            for (int i = _playersContainer.childCount - 1; i >= 0; i--)
+                Destroy(_playersContainer.GetChild(i).gameObject);
+            _playerSlots.Clear();
+
+            HorizontalOrGridLayout(_playersContainer.gameObject, count);
+
+            for (int i = 0; i < count; i++)
+            {
+                bool isLocal = i == 0;
+                BuildPlayerCard(_playersContainer, $"P{i + 1}", isLocal, i + 1,
+                    out var name, out var status, out var bg);
+                _playerSlots.Add(new PlayerSlot { Bg = bg, Name = name, Status = status });
+
+                // Show "VS" between the two cards in 1v1 mode for the classic look.
+                if (_selectedMode == GameMode.Rounds1v1 && count == 2 && i == 0)
+                {
+                    var vs = new GameObject("VS", typeof(RectTransform), typeof(LayoutElement));
+                    vs.transform.SetParent(_playersContainer, false);
+                    vs.GetComponent<LayoutElement>().preferredWidth = 40;
+                    vs.GetComponent<LayoutElement>().flexibleWidth = 0;
+                    var vsTxt = Txt("VSTxt", vs.transform, "VS", 20, FontStyles.Bold, MUTED);
+                    Stretch(vsTxt); vsTxt.alignment = TextAlignmentOptions.Center;
+                }
+            }
+
+            // Map first two cards to legacy fields so other code paths keep working.
+            _player1NameText = _playerSlots.Count > 0 ? _playerSlots[0].Name : null;
+            _player1StatusText = _playerSlots.Count > 0 ? _playerSlots[0].Status : null;
+            _player1CardBg = _playerSlots.Count > 0 ? _playerSlots[0].Bg : null;
+            _player2NameText = _playerSlots.Count > 1 ? _playerSlots[1].Name : null;
+            _player2StatusText = _playerSlots.Count > 1 ? _playerSlots[1].Status : null;
+            _player2CardBg = _playerSlots.Count > 1 ? _playerSlots[1].Bg : null;
+
+            _builtSlotsForMode = _selectedMode;
+            _builtSlotsCount = count;
+        }
+
+        private void HorizontalOrGridLayout(GameObject container, int count)
+        {
+            // Strip any existing layout group.
+            var oldH = container.GetComponent<HorizontalLayoutGroup>();
+            if (oldH != null) Destroy(oldH);
+            var oldG = container.GetComponent<GridLayoutGroup>();
+            if (oldG != null) Destroy(oldG);
+
+            if (count <= 4)
+            {
+                var hl = container.AddComponent<HorizontalLayoutGroup>();
+                hl.spacing = 12; hl.childForceExpandWidth = true; hl.childForceExpandHeight = true;
+                hl.childControlWidth = true; hl.childControlHeight = true;
+            }
+            else
+            {
+                // Up to 10 cards: 2 rows × up to 5 columns grid.
+                int cols = Mathf.CeilToInt(count / 2f);
+                var gl = container.AddComponent<GridLayoutGroup>();
+                gl.cellSize = new Vector2(1100f / cols, 70f);
+                gl.spacing = new Vector2(8f, 8f);
+                gl.startCorner = GridLayoutGroup.Corner.UpperLeft;
+                gl.startAxis = GridLayoutGroup.Axis.Horizontal;
+                gl.childAlignment = TextAnchor.UpperCenter;
+                gl.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+                gl.constraintCount = cols;
+            }
         }
 
         void BuildPlayerCard(Transform p, string id, bool isLocal,
             out TMP_Text nameT, out TMP_Text statusT, out Image cardBg)
         {
+            BuildPlayerCard(p, id, isLocal, isLocal ? 1 : 2, out nameT, out statusT, out cardBg);
+        }
+
+        void BuildPlayerCard(Transform p, string id, bool isLocal, int slotNumber,
+            out TMP_Text nameT, out TMP_Text statusT, out Image cardBg)
+        {
             var card = Panel($"{id}Card", p, isLocal ? CARD : CARD_WAIT);
             cardBg = card.GetComponent<Image>();
 
+            Color stripeColor = isLocal ? BLUE : RED;
+
             // Colored side stripe
-            var stripe = Panel($"{id}Stripe", card.transform, isLocal ? BLUE : RED);
+            var stripe = Panel($"{id}Stripe", card.transform, stripeColor);
             Anchors(stripe, 0f, 0f, 0.04f, 1f);
 
             // Badge
-            var badge = Panel($"{id}Badge", card.transform, isLocal ? BLUE : RED);
+            var badge = Panel($"{id}Badge", card.transform, stripeColor);
             Anchors(badge, 0.08f, 0.70f, 0.28f, 0.92f);
-            var badgeTxt = Txt($"{id}BT", badge.transform, isLocal ? "P1" : "P2",
+            var badgeTxt = Txt($"{id}BT", badge.transform, $"P{slotNumber}",
                 13, FontStyles.Bold, Color.white);
             Stretch(badgeTxt); badgeTxt.alignment = TextAlignmentOptions.Center;
 
@@ -674,6 +754,13 @@ namespace FrentePartido.UI
                     : "1V1: mejor de 5 rondas.";
             }
 
+            // Switch slot count: 1v1 always shows 2 cards, deathmatch shows up to 10
+            // (clamped to current player count, minimum 2 so the host always sees a
+            // free seat for the next joiner).
+            int desired = mode == GameMode.Deathmatch ? 10 : 2;
+            RebuildPlayerSlots(desired);
+            UpdatePlayerList();
+
             if (publish && NetworkSessionManager.Instance != null && NetworkSessionManager.Instance.IsHost)
                 NetworkSessionManager.Instance.SetGameMode(mode);
         }
@@ -727,26 +814,25 @@ namespace FrentePartido.UI
                 : System.Array.Empty<NetworkSessionManager.LobbyPlayerInfo>();
             if (_modeInfoText != null && _selectedMode == GameMode.Deathmatch)
                 _modeInfoText.text = $"DEATHMATCH: {players.Count}/10 jugadores - 10 min - 20 kills.";
-            bool hasP2 = players.Count >= 2;
 
-            string p1Name = players.Count > 0 ? players[0].PlayerName : (GameConfig.Preferences.playerName ?? "Jugador 1");
-            string p2Name = hasP2 ? players[1].PlayerName : "Esperando rival...";
-            bool p1Ready = players.Count > 0 && players[0].IsReady;
-            bool p2Ready = hasP2 && players[1].IsReady;
+            int desiredSlots = _selectedMode == GameMode.Deathmatch ? 10 : 2;
+            if (_builtSlotsCount != desiredSlots) RebuildPlayerSlots(desiredSlots);
 
-            if (_player1NameText != null)
-                _player1NameText.text = p1Name;
-            if (_player1StatusText != null)
-                _player1StatusText.text = p1Ready ? "Listo" : "Conectado";
-            if (_player1CardBg != null)
-                _player1CardBg.color = p1Ready ? new Color(0.12f, 0.22f, 0.14f, 1f) : CARD;
+            Color readyBg = new Color(0.12f, 0.22f, 0.14f, 1f);
+            for (int i = 0; i < _playerSlots.Count; i++)
+            {
+                var slot = _playerSlots[i];
+                bool occupied = i < players.Count;
+                string name = occupied
+                    ? players[i].PlayerName
+                    : (i == 0 ? (GameConfig.Preferences.playerName ?? "Jugador") : "Esperando...");
+                bool ready = occupied && players[i].IsReady;
 
-            if (_player2NameText != null)
-                _player2NameText.text = hasP2 ? p2Name : "Esperando rival...";
-            if (_player2StatusText != null)
-                _player2StatusText.text = hasP2 ? (p2Ready ? "Listo" : "Conectado") : "";
-            if (_player2CardBg != null)
-                _player2CardBg.color = hasP2 ? (p2Ready ? new Color(0.12f, 0.22f, 0.14f, 1f) : CARD) : CARD_WAIT;
+                if (slot.Name != null) slot.Name.text = name;
+                if (slot.Status != null) slot.Status.text = occupied ? (ready ? "Listo" : "Conectado") : "";
+                if (slot.Bg != null)
+                    slot.Bg.color = occupied ? (ready ? readyBg : CARD) : CARD_WAIT;
+            }
         }
 
         void OnPlayerJoined(ulong id) { UpdatePlayerList(); CheckStartCondition(); }

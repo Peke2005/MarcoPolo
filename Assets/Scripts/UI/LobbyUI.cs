@@ -754,15 +754,17 @@ namespace FrentePartido.UI
                     : "1V1: mejor de 5 rondas.";
             }
 
-            // Switch slot count: 1v1 always shows 2 cards, deathmatch shows up to 10
-            // (clamped to current player count, minimum 2 so the host always sees a
-            // free seat for the next joiner).
+            // Push the new mode to NetworkSessionManager FIRST, otherwise
+            // UpdatePlayerList below will see session.SelectedGameMode mismatch our
+            // local _selectedMode and recursively revert us back to the old mode.
+            if (publish && NetworkSessionManager.Instance != null && NetworkSessionManager.Instance.IsHost)
+                NetworkSessionManager.Instance.SetGameMode(mode);
+
+            // Switch slot count: 1v1 always shows 2 cards, deathmatch shows up to 10.
             int desired = mode == GameMode.Deathmatch ? 10 : 2;
             RebuildPlayerSlots(desired);
             UpdatePlayerList();
-
-            if (publish && NetworkSessionManager.Instance != null && NetworkSessionManager.Instance.IsHost)
-                NetworkSessionManager.Instance.SetGameMode(mode);
+            CheckStartCondition();
         }
 
         void SelectFaction(int faction)

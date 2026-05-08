@@ -254,7 +254,10 @@ Hay 3 habilidades seleccionables en lobby.
 - Arm delay: 0.5 segundos.
 - Mina spawneada como NetworkObject.
 - No explota instantaneamente al owner.
-- Visual reducido/mejorado respecto a la primera version.
+- Mina invisible mientras esta colocada.
+- Al pisarla, aparece un FX corto de activacion/explosion y texto flotante.
+- La victima ve `TE COMISTE UNA MINA`; el resto ve `MINA ACTIVADA`.
+- La animacion dura menos de 1 segundo y no bloquea el gameplay.
 
 ---
 
@@ -762,7 +765,7 @@ Rangos calculados por backend:
 14. Granada hace damage.
 15. Escudo bloquea balas.
 16. Dash no atraviesa cajas.
-17. Mina explota al rival.
+17. Mina invisible explota al rival y muestra FX/texto al activarse.
 18. Al llegar a 5 rondas, acaba partida.
 19. Stats suben en perfil.
 
@@ -799,6 +802,7 @@ Rangos calculados por backend:
 - Escudo visual sin bloquear damage.
 - Dash sin desplazamiento real.
 - Mina demasiado grande/fea.
+- Minas visibles convertidas a minas invisibles con FX solo al activarse.
 - Cooldown de habilidades sin feedback correcto.
 - HUD de vida/armor mal posicionado.
 - Bordes negros molestos en juego.

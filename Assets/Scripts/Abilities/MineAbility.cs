@@ -1,6 +1,7 @@
 using Unity.Netcode;
 using UnityEngine;
 using FrentePartido.Player;
+using FrentePartido.Core;
 
 namespace FrentePartido.Abilities
 {
@@ -66,9 +67,7 @@ namespace FrentePartido.Abilities
             mineObj.transform.position = position;
             mineObj.transform.localScale = Vector3.one;
 
-            // Visual sprite — visible orange disc with darker center so it reads as a hazard.
-            CreateMineVisual(mineObj.transform, mineColor, visualScale, true);
-
+            // No renderer here: armed mines are invisible until triggered.
             // Trigger collider for detection
             CircleCollider2D trigger = mineObj.AddComponent<CircleCollider2D>();
             trigger.isTrigger = true;
@@ -207,13 +206,8 @@ namespace FrentePartido.Abilities
         [ClientRpc]
         private void ShowMinePlacedClientRpc(Vector2 position, ulong mineId, float detectionRadius)
         {
-            Debug.Log($"[MineAbility] Mine placed visual at {position}");
-            if (IsServer) return;
+            Debug.Log($"[MineAbility] Invisible mine armed at {position}");
             DestroyMineVisual();
-
-            _activeMineVisual = new GameObject($"MineVisual_{OwnerClientId}");
-            _activeMineVisual.transform.position = position;
-            CreateMineVisual(_activeMineVisual.transform, mineColor, visualScale, true);
             _activeMineVisualId = mineId;
         }
 
@@ -225,10 +219,36 @@ namespace FrentePartido.Abilities
         }
 
         [ClientRpc]
-        public void ShowMineExplodedClientRpc(Vector2 position)
+        public void ShowMineExplodedClientRpc(Vector2 position, ulong targetClientId)
         {
             Debug.Log($"[MineAbility] Mine exploded at {position}");
-            // Spawn explosion VFX / play audio here.
+            FxManager.SpawnExplosionRing(position, 1.35f);
+            FxManager.PlayExplosion(position, 0.45f);
+            bool localVictim = NetworkManager.Singleton != null && targetClientId == NetworkManager.Singleton.LocalClientId;
+            SpawnMineTriggeredFx(position, localVictim);
+        }
+
+        private static void SpawnMineTriggeredFx(Vector2 position, bool localVictim)
+        {
+            var fx = new GameObject("FX_MineTriggered");
+            fx.transform.position = position;
+
+            CreateMineVisual(fx.transform, new Color(1f, 0.34f, 0.06f, 1f), 0.62f, false);
+
+            var label = new GameObject("MineTriggerLabel");
+            label.transform.SetParent(fx.transform, false);
+            label.transform.localPosition = new Vector3(0f, 0.82f, 0f);
+            var text = label.AddComponent<TextMesh>();
+            text.text = localVictim ? "TE COMISTE UNA MINA" : "MINA ACTIVADA";
+            text.anchor = TextAnchor.MiddleCenter;
+            text.alignment = TextAlignment.Center;
+            text.characterSize = 0.13f;
+            text.fontSize = 72;
+            text.color = localVictim ? new Color(1f, 0.92f, 0.35f, 1f) : new Color(1f, 0.64f, 0.20f, 1f);
+            var mr = text.GetComponent<MeshRenderer>();
+            if (mr != null) mr.sortingOrder = 45;
+
+            fx.AddComponent<MineTriggeredFx>().Initialize(localVictim);
         }
 
         public override void OnNetworkDespawn()
@@ -313,7 +333,7 @@ namespace FrentePartido.Abilities
             if (ownerAbility != null)
             {
                 ownerAbility.NotifyMineExploded(_mineId);
-                ownerAbility.ShowMineExplodedClientRpc((Vector2)transform.position);
+                ownerAbility.ShowMineExplodedClientRpc((Vector2)transform.position, targetClientId);
             }
 
             Destroy(gameObject);
@@ -350,6 +370,52 @@ namespace FrentePartido.Abilities
         {
             float pulse = 1f + Mathf.Sin(Time.time * 5.5f + _phase) * 0.055f;
             transform.localScale = Vector3.one * pulse;
+        }
+    }
+
+    public class MineTriggeredFx : MonoBehaviour
+    {
+        private SpriteRenderer[] _renderers;
+        private TextMesh _label;
+        private Color[] _baseColors;
+        private float _time;
+        private bool _localVictim;
+
+        public void Initialize(bool localVictim)
+        {
+            _localVictim = localVictim;
+            _renderers = GetComponentsInChildren<SpriteRenderer>(true);
+            _label = GetComponentInChildren<TextMesh>(true);
+            _baseColors = new Color[_renderers.Length];
+
+            for (int i = 0; i < _renderers.Length; i++)
+                _baseColors[i] = _renderers[i].color;
+        }
+
+        private void Update()
+        {
+            _time += Time.deltaTime;
+            const float life = 0.9f;
+            float k = Mathf.Clamp01(_time / life);
+            float pop = Mathf.Sin(k * Mathf.PI);
+            float scale = Mathf.Lerp(0.45f, _localVictim ? 1.25f : 1.05f, Mathf.Sqrt(k));
+            transform.localScale = Vector3.one * (scale + pop * 0.08f);
+
+            for (int i = 0; i < _renderers.Length; i++)
+            {
+                Color c = _baseColors[i];
+                _renderers[i].color = new Color(c.r, c.g, c.b, c.a * (1f - k));
+            }
+
+            if (_label != null)
+            {
+                Color c = _label.color;
+                _label.transform.localPosition = new Vector3(0f, 0.82f + k * 0.42f, 0f);
+                _label.color = new Color(c.r, c.g, c.b, 1f - k);
+            }
+
+            if (_time >= life)
+                Destroy(gameObject);
         }
     }
 }

@@ -101,33 +101,42 @@ Joiners re-publish their state at +0.4 s, +1.0 s, +2.0 s, +4.0 s after `LobbyUI.
 
 ## 4. Auth + profile backend
 
-The backend lives in `Backend/`. It is a Node 20 + Express server backed by Postgres 16, packaged as Docker.
+### Production: Supabase Edge Functions (no Docker required)
 
-### Hosting
+The live auth/profile backend is hosted on **Supabase Edge Functions** as a Deno function. The build ships with this URL baked into `GameConfig.DEFAULT_AUTH_BASE_URL`:
 
-| Environment        | URL                              | Notes                                         |
-|--------------------|----------------------------------|-----------------------------------------------|
-| Primary (Radmin)   | `http://26.17.117.206:3001`      | baked into the build via `GameConfig.DEFAULT_AUTH_BASE_URL` |
-| Fallback (Radmin)  | `http://26.234.30.190:3001`      | tried automatically if primary times out      |
+```
+https://kufkgjyeptuzptmegsmf.supabase.co/functions/v1/frentepartido-auth
+```
 
-The host machine is whichever PC runs `HOST_RADMIN.bat`. Both peers must be connected to the same **Radmin VPN** so the `26.x.x.x` private IP is reachable.
+Because it is a public HTTPS endpoint, **the host PC does not need to run anything** for login/stats to work. Players don't need Radmin, Docker, port forwarding or firewall rules just to log in. Radmin / `HOST_RADMIN.bat` is only needed for the Relay/lobby part of the gameplay if you want to play LAN-style; for cloud Relay (Unity Services) it is not required either, but Radmin keeps friends in a known network for ping consistency.
 
-To start the backend manually:
+The Postgres tables that back the function:
+
+- `users` — accounts (username, bcrypt password hash, created_at)
+- `user_stats` — matches played, wins, losses, rank
+
+Both are managed in the Supabase project; nothing in the repo writes to them outside the function.
+
+### Local fallback: Node + Postgres in Docker
+
+`Backend/` still contains the original Node 20 + Express + Postgres 16 stack packaged with Docker. It is **only needed when Supabase is down or you want to develop offline**. To use it:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\Tools\StartAuthBackendRadmin.ps1 -RadminIp 26.17.117.206 -Port 3001
 ```
 
-The script:
-1. Detects whether `Backend/.env` has a real `DATABASE_URL` (Supabase mode) or falls back to the local Postgres in `Backend/docker-compose.yml`.
-2. Adds a Windows Firewall rule for TCP `3001` (run once as admin).
-3. `docker compose up -d` starts the API container (and the local DB if not using Supabase).
+Then change the URL in-game from the auth screen, or edit `GameConfig.DEFAULT_AUTH_BASE_URL` and rebuild. The fallback URLs that used to ship with the build are:
 
-Health check returns `{"status":"ok"}` from `/health`.
+| Environment        | URL                              | Status                                   |
+|--------------------|----------------------------------|------------------------------------------|
+| Active             | `https://kufkgjyeptuzptmegsmf.supabase.co/functions/v1/frentepartido-auth` | Cloud, default in builds |
+| Old Radmin host    | `http://26.17.117.206:3001`      | Only if Docker backend running on that PC |
+| Old Radmin fallback| `http://26.234.30.190:3001`      | Idem                                     |
 
 ### REST endpoints
 
-All under the base URL above.
+The Supabase Edge Function exposes the same routes as the Docker fallback:
 
 | Method | Path               | Auth     | Body / params                                     | Purpose                                            |
 |--------|--------------------|----------|---------------------------------------------------|----------------------------------------------------|
@@ -138,15 +147,13 @@ All under the base URL above.
 | GET    | `/profile/stats`   | Bearer   | —                                                 | Returns matches played / wins / losses / win rate. |
 | POST   | `/profile/match`   | Bearer   | `{ won: bool }`                                   | Records the result of a finished match.            |
 
-`requireAuth` middleware verifies a Bearer JWT signed with `JWT_SECRET` (configured via env in `docker-compose.yml`).
+JWTs are signed with the function's `JWT_SECRET` env var (managed in Supabase).
 
-### Data model (Postgres)
-Initialized by `Backend/init.sql`:
+### Where the secrets live
 
-- `users(id, username UNIQUE, password_hash, created_at)` — bcrypt password hashes.
-- `matches(id, user_id FK users, won BOOL, played_at)` — append-only match log.
-
-`/profile/stats` aggregates over `matches` for the authenticated user.
+- Supabase project ID + service-role key live only in the Supabase dashboard. Nothing sensitive is committed.
+- `Backend/.env` is `.gitignore`'d. It only matters for the Docker fallback.
+- The game build only knows the public anon Edge Function URL.
 
 ### Game-side integration
 - `Assets/Scripts/Auth/AuthService.cs` — REST client, exposes `RegisterAsync`, `LoginAsync`, `VerifyTokenAsync`.
@@ -294,7 +301,7 @@ git push                            # they pull from master
 ```
 
 ```bash
-# Sanity-check the auth backend from a teammate's machine
-curl http://26.17.117.206:3001/health
+# Sanity-check the live auth backend (Supabase) from anywhere
+curl https://kufkgjyeptuzptmegsmf.supabase.co/functions/v1/frentepartido-auth/health
 # {"status":"ok"}
 ```

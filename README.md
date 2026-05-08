@@ -1,307 +1,885 @@
 # Marco Polo / Frente Partido
 
-Top-down 2D online shooter for PC. Supports two game modes:
+Juego 2D top-down online para PC hecho en Unity. Es un shooter arcade tactico con login, salas online por codigo, lobby, habilidades, pickups, rondas 1v1 y modo deathmatch hasta 10 jugadores.
 
-- **1v1 Rounds**: best-of-9, kill ends round, sudden death (cover destroy) on time-out.
-- **Deathmatch**: 2–10 players, 10 min timer, first to 20 kills (or top score on time-out).
+Estado del proyecto: funcional para pruebas reales con amigos. Build Windows incluida en el repo.
 
-Built in **Unity 2022.3.62f1** with **Netcode for GameObjects (NGO)**, **Unity Relay**, **Unity Lobby**, the **new Input System**, and **TextMeshPro**. Auth/profile stats run on a self-hosted Node + Postgres backend (Docker) reachable over a Radmin VPN.
+Fecha de este README: 2026-05-08.
 
 ---
 
-## 1. Project layout
+## Resumen rapido
 
+- Motor: Unity 2022.3.62f1.
+- Plataforma principal: Windows PC.
+- Networking: host + clientes con Netcode for GameObjects, Unity Relay y Unity Lobby.
+- Backend publico: Supabase Edge Function para login, registro y estadisticas.
+- Base de datos: Supabase Postgres.
+- Build lista: `Builds/Release/FrentePartido/FrentePartido.exe`.
+- ZIP para pasar a amigos: `Builds/Release/FrentePartido-Windows.zip`.
+- No hace falta Docker ni Radmin para login/stats.
+- No hace falta Radmin para jugar si Relay/Lobby de Unity funciona correctamente.
+- Docker queda solo como fallback local de desarrollo.
+
+---
+
+## Como jugar con un amigo
+
+### Opcion normal: build ya hecha
+
+1. Descargar o hacer `git pull` del repo.
+2. Abrir `Builds/Release/FrentePartido/FrentePartido.exe`.
+3. Registrarse o iniciar sesion.
+4. Un jugador pulsa `CREAR SALA`.
+5. Copia el codigo de sala.
+6. El otro jugador pulsa `UNIRSE CON CODIGO` y pega el codigo.
+7. En lobby, ambos eligen habilidad/color y pulsan `LISTO`.
+8. El host pulsa `INICIAR`.
+
+Los dos ejecutan el mismo `.exe`. No hay exe separado de host/cliente.
+
+### Opcion ZIP
+
+Pasar este archivo:
+
+```text
+Builds/Release/FrentePartido-Windows.zip
 ```
-MarcoPolo/
-├── Assets/
-│   ├── Scripts/
-│   │   ├── Abilities/        Dash / Shield / Mine + AbilityController
-│   │   ├── Auth/             Auth login UI + REST client
-│   │   ├── Combat/           WeaponController, GrenadeController, Projectile, DamageDealer
-│   │   ├── Core/             SceneFlowController, GameConfig, GameplayVisualNormalizer, ProfileStats
-│   │   ├── Data/             ScriptableObjects (BalanceTuning, MapDefinition, AbilityDefinition, WeaponData) + enums
-│   │   ├── Editor/           FrentePartidoSetup (scene factory), StandaloneSmokeBuild
-│   │   ├── Match/            MatchManager, RoundManager, SuddenDeathController, BeaconCaptureController
-│   │   ├── Networking/       NetworkSessionManager, RelayConnectionManager, LobbyManager,
-│   │   │                     PlayerSpawnManager, NetworkGameState, ClientNetworkTransform
-│   │   ├── Pickups/          AmmoPickup, ArmorPickup, HealthPickup, PickupSpawner
-│   │   ├── Player/           PlayerInputReader, PlayerMotor2D, PlayerHealth, PlayerPresentation,
-│   │   │                     PlayerAimController, PlayerStateController, HitFlashController
-│   │   └── UI/               MainMenuUI, LobbyUI, HUDController, ResultsUI, RoundTimerUI, CooldownWidget
-│   ├── Resources/NetworkPrefabs/   Player, Grenade, Mine, Pickup_*  (registered at runtime)
-│   ├── ScriptableObjects/    Balance/MainBalance.asset, Abilities/*, Maps/*, Weapons/Rifle_Standard.asset
-│   ├── Scenes/               00_Boot, 01_Auth, 02_MainMenu, 03_Lobby, 04_Game, 05_PostMatch
-│   └── TextMesh Pro/         LiberationSans SDF font + shaders
-├── Backend/                  Node + Postgres auth/profile API (Docker)
-├── Builds/Release/           Player build + zip — TRACKED in git so friends `git pull` to update
-├── Tools/                    Build / Radmin helper PowerShell scripts
-├── HOST_RADMIN.bat           One-click host: starts auth backend, launches game
-├── CLIENT_RADMIN.bat         One-click client: launches game
-└── RADMIN_RELEASE.md         Original radmin/release notes
+
+El amigo lo extrae y ejecuta:
+
+```text
+FrentePartido.exe
 ```
 
-Each script domain is its own assembly (asmdef) so compile times stay short and circular references are catch-able.
-
 ---
 
-## 2. Game modes
+## URLs y servicios activos
 
-### 1v1 Rounds (`GameMode.Rounds1v1`)
-- 2 players, host = Blue (slot 0), client = Red (slot 1).
-- Round duration **60 s**, intro **3 s**, round-end delay **4 s**.
-- Kill ends the round; the killer wins the round.
-- If the timer expires with both players alive, **sudden death** triggers: every `Cover_*` and `Decor_*` object is destroyed by `SuddenDeathController.BreakSuddenDeathCover` so neither player has cover. Round still ends only on a kill (60 s safety cap).
-- First to **5 round wins** takes the match (`roundsToWin = 5`, `maxRounds = 9`).
+### Backend publico Supabase
 
-### Deathmatch (`GameMode.Deathmatch`)
-- 2–10 players. Lobby grid grows from 2-card row to 2×5 grid based on `_selectedMode`.
-- Match duration **10 min** (`deathmatchDuration = 600`), **20 kills** to win (`deathmatchKillsToWin = 20`).
-- Respawns are random: `PlayerSpawnManager.GetRandomDeathmatchSpawn` picks from `MapDefinition.deathmatchSpawnPoints` biased toward the spawn furthest from any living opponent (60% best, 40% second-best).
-- Bigger arena (44×26), bounds switched at runtime via `RuntimeMatchSettings.BoundsMin/Max`.
-- **Each kill refills the killer's grenade** — `MatchManager.RegisterKillServer` calls `RefillKillerGrenadeServer` that bumps `WeaponController.GrenadesRemaining` to 1 on the killer's player object.
-- Central plaza: tinted floor + glow + marker, fully open from every direction (no walls).
-- Live scoreboard top-left lists the top 5 by kills under the header `DM`.
-- On time-up, `MatchManager.FinishDeathmatchByScoreServer` declares the leader.
+El juego apunta por defecto a:
 
-The match-end overlay (`HUDController.ShowBigOverlay`) reads `MatchManager.FinalP1Score` / `FinalP2Score` cached when `NotifyMatchEndClientRpc` arrives, so client and host can't disagree on the final number even if a NetworkVariable update raced the RPC.
-
----
-
-## 3. Networking architecture
-
-### Stack
-- **Netcode for GameObjects 1.11** — host-authoritative server-RPC + ClientRpc model.
-- **Unity Relay** — NAT-traverse via Unity's relay servers; the lobby code is a Relay join code.
-- **Unity Lobby** — used to advertise the room metadata (the actual gameplay link is the Relay allocation).
-- **NGO `UnityTransport`** wrapping the Relay allocation.
-
-### Player transform: owner-authoritative
-`Assets/Scripts/Networking/ClientNetworkTransform.cs` overrides `OnIsServerAuthoritative()` to return `false`. The Player prefab references this via the GUID `9b4c8a2e7d1f4a90b9876a14b3c77100`. Result: each owner writes their own transform and the server replicates to others. Without this, clients rubber-banded one round-trip behind the server.
-
-Movement abilities that need to teleport the local player (Dash) run **on the owner side first** (`AbilityController.HandleAbilityInput`) before sending the cooldown RPC, otherwise the server's `motor.TeleportTo` would never reach the client.
-
-### Lobby state
-Custom NGO named messages:
-
-| Message ID         | Direction        | Purpose                                                |
-|--------------------|------------------|--------------------------------------------------------|
-| `FP_LOBBY_UPDATE`  | client → server  | "Here's my name/ability/ready state"                   |
-| `FP_LOBBY_STATE`   | server → clients | Authoritative roster + selected `GameMode` snapshot    |
-
-Joiners re-publish their state at +0.4 s, +1.0 s, +2.0 s, +4.0 s after `LobbyUI.Start` (`RepublishBootstrap` coroutine) because the very first send sometimes fired before NGO's `IsListening` flag flipped, leaving the host with the placeholder name.
-
-### Spawn flow
-1. `PlayerSpawnManager` (server-only) listens to `OnClientConnected`.
-2. Spawns the Player prefab at the slot point (`spawnPointA` for slot 0, `spawnPointB` for slot 1, or curated DM points).
-3. Calls `SpawnAsPlayerObject` then issues `RespawnPlayerClientRpc` so the owner snaps to the spawn position locally — required because owner-auth NT would otherwise overwrite the server's position with the prefab's local origin.
-4. When 2+ players are present, `NetworkGameState.AssignPlayerSlots` sets `Player1ClientId` / `Player2ClientId`.
-5. `RoundManager.Update` (server) auto-discovers both `PlayerHealth` instances and calls `RegisterPlayers` so death events route correctly.
-
----
-
-## 4. Auth + profile backend
-
-### Production: Supabase Edge Functions (no Docker required)
-
-The live auth/profile backend is hosted on **Supabase Edge Functions** as a Deno function. The build ships with this URL baked into `GameConfig.DEFAULT_AUTH_BASE_URL`:
-
-```
+```text
 https://kufkgjyeptuzptmegsmf.supabase.co/functions/v1/frentepartido-auth
 ```
 
-Because it is a public HTTPS endpoint, **the host PC does not need to run anything** for login/stats to work. Players don't need Radmin, Docker, port forwarding or firewall rules just to log in. Radmin / `HOST_RADMIN.bat` is only needed for the Relay/lobby part of the gameplay if you want to play LAN-style; for cloud Relay (Unity Services) it is not required either, but Radmin keeps friends in a known network for ping consistency.
+Archivo donde esta configurado:
 
-The Postgres tables that back the function:
+```text
+Assets/Scripts/Core/GameConfig.cs
+```
 
-- `users` — accounts (username, bcrypt password hash, created_at)
-- `user_stats` — matches played, wins, losses, rank
+Constante:
 
-Both are managed in the Supabase project; nothing in the repo writes to them outside the function.
+```csharp
+public const string DEFAULT_AUTH_BASE_URL = "https://kufkgjyeptuzptmegsmf.supabase.co/functions/v1/frentepartido-auth";
+```
 
-### Local fallback: Node + Postgres in Docker
-
-`Backend/` still contains the original Node 20 + Express + Postgres 16 stack packaged with Docker. It is **only needed when Supabase is down or you want to develop offline**. To use it:
+### Health check
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\Tools\StartAuthBackendRadmin.ps1 -RadminIp 26.17.117.206 -Port 3001
+curl https://kufkgjyeptuzptmegsmf.supabase.co/functions/v1/frentepartido-auth/health
 ```
 
-Then change the URL in-game from the auth screen, or edit `GameConfig.DEFAULT_AUTH_BASE_URL` and rebuild. The fallback URLs that used to ship with the build are:
+Respuesta esperada:
 
-| Environment        | URL                              | Status                                   |
-|--------------------|----------------------------------|------------------------------------------|
-| Active             | `https://kufkgjyeptuzptmegsmf.supabase.co/functions/v1/frentepartido-auth` | Cloud, default in builds |
-| Old Radmin host    | `http://26.17.117.206:3001`      | Only if Docker backend running on that PC |
-| Old Radmin fallback| `http://26.234.30.190:3001`      | Idem                                     |
-
-### REST endpoints
-
-The Supabase Edge Function exposes the same routes as the Docker fallback:
-
-| Method | Path               | Auth     | Body / params                                     | Purpose                                            |
-|--------|--------------------|----------|---------------------------------------------------|----------------------------------------------------|
-| GET    | `/health`          | none     | —                                                 | Liveness probe. Returns `{ status: "ok" }`.        |
-| POST   | `/auth/register`   | none     | `{ username, password }`                          | Creates a user. Returns `{ token, user }`.         |
-| POST   | `/auth/login`      | none     | `{ username, password }`                          | Logs in. Returns `{ token, user }`.                |
-| GET    | `/auth/verify`     | Bearer   | —                                                 | Verifies the JWT and returns the user payload.     |
-| GET    | `/profile/stats`   | Bearer   | —                                                 | Returns matches played / wins / losses / win rate. |
-| POST   | `/profile/match`   | Bearer   | `{ won: bool }`                                   | Records the result of a finished match.            |
-
-JWTs are signed with the function's `JWT_SECRET` env var (managed in Supabase).
-
-### Where the secrets live
-
-- Supabase project ID + service-role key live only in the Supabase dashboard. Nothing sensitive is committed.
-- `Backend/.env` is `.gitignore`'d. It only matters for the Docker fallback.
-- The game build only knows the public anon Edge Function URL.
-
-### Game-side integration
-- `Assets/Scripts/Auth/AuthService.cs` — REST client, exposes `RegisterAsync`, `LoginAsync`, `VerifyTokenAsync`.
-- `Assets/Scripts/Core/ProfileStats.cs` — calls `/profile/stats` and `/profile/match`. The HUD invokes `ProfileStats.RecordMatchAsync(localWon)` exactly once per match-end (guarded by `_profileMatchRecorded` so a re-fired `OnMatchWon` doesn't double-count).
+```json
+{"status":"ok","store":"supabase","project":"kufkgjyeptuzptmegsmf"}
+```
 
 ---
 
-## 5. Client launch flow
+## Funciones implementadas
 
-```
-┌────────────┐   ┌─────────────┐   ┌────────────────┐   ┌──────────┐   ┌──────────┐
-│ 00_Boot    │──▶│ 01_Auth     │──▶│ 02_MainMenu    │──▶│ 03_Lobby │──▶│ 04_Game  │
-└────────────┘   └─────────────┘   └────────────────┘   └──────────┘   └──────────┘
-                                                                            │
-                                                                            ▼
-                                                                      ┌─────────────┐
-                                                                      │ 05_PostMatch│
-                                                                      └─────────────┘
-```
+### Cuenta y perfil
 
-- **Boot** initializes `NetworkSessionManager`, `GameConfig`, `ProfileStats`.
-- **Auth** lets the player register or log in against the backend; the JWT and player name persist to `GameConfig.Preferences` (`PlayerPrefs`).
-- **MainMenu** offers Create Sala / Unirse con código / Ajustes / Salir, with a full-screen `LoadingOverlay` while Relay calls run.
-- **Lobby** lets the host pick game mode and ability, players toggle Listo, and the host hits Iniciar.
-- **Game** is the actual match. HUD elements:
-  - Top-left: round timer + live score / DM scoreboard
-  - Bottom-left: HP bar (red, fill = current/max) + armor bar (cyan, starts empty, fills 0/50 from pickups)
-  - Bottom-right: ammo `N/M`, reload bar, grenade icon (`G` letter, yellow when ready, gray when used), ability icon (`Q` letter colored by ability type)
-- **PostMatch** is currently bypassed: the HUD shows a full-screen `BigOverlay` and returns to the main menu after 7 s.
+- Pantalla de autenticacion.
+- Registro de usuario.
+- Login con usuario/email y password.
+- Token JWT persistido localmente.
+- Auto-login si el token sigue siendo valido.
+- Nombre del jugador conectado mostrado en menu/lobby/partida.
+- Perfil con estadisticas.
+- Estadisticas guardadas en Supabase, no solo local:
+  - partidas jugadas
+  - victorias
+  - derrotas
+  - winrate
+  - rango
+- Registro automatico de resultado al acabar partida.
 
-### Controls
-| Action     | Bind                        |
-|------------|-----------------------------|
-| Move       | WASD / Arrows / Left stick  |
-| Aim        | Mouse                       |
-| Fire       | LMB / RT                    |
-| Reload     | R / X                       |
-| Grenade    | G / RMB / LT                |
-| Ability    | Q / Space / B               |
-| Pause      | Esc / Start                 |
+### Menu principal
+
+- Crear sala.
+- Unirse con codigo.
+- Perfil.
+- Ajustes.
+- Salir.
+- Overlay de carga para llamadas Relay/Lobby.
+- Estetica custom verde/amarillo militar.
+
+### Lobby
+
+- Codigo de sala visible.
+- Copiar codigo.
+- Lista de jugadores conectados.
+- Nombre real de cada jugador.
+- Estado conectado/listo.
+- Selector de modo de juego.
+- Selector de habilidad.
+- Selector de color/faccion.
+- Boton `LISTO`.
+- Boton `INICIAR` solo util para host.
+- Validacion de jugadores antes de iniciar.
+- Republish de estado de lobby para evitar nombres placeholder tipo `Jugador 2`.
+
+### Modos de juego
+
+#### 1v1 Rondas
+
+- Jugadores: exactamente 2.
+- Formato actual: primero a 5 rondas.
+- Maximo: 9 rondas.
+- Duracion de ronda: 60 segundos.
+- Intro de ronda: 3 segundos.
+- Fin/intermedio de ronda: 4 segundos.
+- Spawn izquierdo/derecho.
+- Kill termina la ronda.
+- Victoria de partida al llegar a 5 rondas.
+- Muerte subita si se acaba el tiempo.
+- En muerte subita se rompen coberturas/decorados para forzar pelea.
+- Reset de vida, armor, municion, granada, habilidad e input por ronda.
+- Fix aplicado: al morir no queda el disparo mantenido para la ronda siguiente.
+
+#### Deathmatch
+
+- Jugadores: de 2 a 10.
+- Duracion: 10 minutos.
+- Objetivo: primero a 20 kills.
+- Si se acaba el tiempo, gana quien tenga mas kills.
+- Mapa runtime mas grande que el 1v1.
+- Bounds runtime: `-22,-13` a `22,13`.
+- Spawns distribuidos para hasta 10 jugadores.
+- Respawn tras morir.
+- Delay de respawn: 1.5 segundos.
+- Scoreboard en HUD.
+- Recompensa de kill: el killer recupera una granada.
 
 ---
 
-## 6. Combat tuning
+## Gameplay implementado
 
-`Assets/ScriptableObjects/Balance/MainBalance.asset`:
+### Movimiento
 
-| Field                       | Value | Meaning                                                        |
-|-----------------------------|-------|----------------------------------------------------------------|
-| `playerMaxHealth`           | 100   | Full HP                                                        |
-| `moveSpeed`                 | 5     | Units / sec                                                    |
-| `grenadesPerRound`          | 1     | Grenade quota at round start                                   |
-| `grenadeDamage`             | 40    | Center damage, linear falloff to 0 at radius                   |
-| `grenadeRadius`             | 2.5   | Explosion radius                                               |
-| `grenadeFuseTime`           | 1.2   | Seconds before detonation                                      |
-| `grenadeThrowForce`         | 12    | Initial throw velocity                                         |
-| `roundDuration`             | 60    | 1v1 round timer                                                |
-| `roundIntroDuration`        | 3     |                                                                |
-| `roundEndDuration`          | 4     |                                                                |
-| `roundsToWin`               | 5     | First to 5 wins the match (1v1)                                |
-| `maxRounds`                 | 9     | Hard cap                                                       |
-| `deathmatchDuration`        | 600   | DM timer (10 min)                                              |
-| `deathmatchKillsToWin`      | 20    | DM target                                                      |
-| `deathmatchRespawnDelay`    | 1.5   | Seconds before respawn                                         |
-| Pickup spawn / amounts      | …     | See file                                                       |
+- Movimiento top-down con WASD.
+- Apuntado con raton.
+- Movimiento sincronizado en red.
+- Transform owner-authoritative para reducir input lag del cliente.
+- Clamp de posicion por bounds del modo.
+- Respawn con snap local para evitar que cliente aparezca en el centro.
 
-`Assets/ScriptableObjects/Weapons/Rifle_Standard.asset`: `damage = 25`, `magazineSize = 8`, `fireRate = 4 shots/s`, `range = 30`. With max HP 100 that is **4 bullets to kill** (no falloff — `WeaponController` calls `DamageDealer.CalculateDamage(weaponData.damage)` with no max range so falloff is disabled).
+### Arma principal
 
-Abilities (`Assets/ScriptableObjects/Abilities/`):
+Fusil estandar:
 
-| Ability  | `value1` | `value2` | `cooldown` | `duration` | Effect                                                       |
-|----------|----------|----------|------------|------------|--------------------------------------------------------------|
-| Dash     | 4 (dist) | 15 (spd) | 7 s        | 0.3 s      | Owner-side instant teleport, blocks on walls, push-back if clipped |
-| Shield   | 60 HP    | 90°      | 12 s       | 2.5 s      | Bubble around player, blocks bullets, decays                 |
-| Mine     | 35 dmg   | 1.5 r    | 14 s       | —          | Server-spawned NetworkObject, 0.5 s arm delay, owner-safe    |
+- Damage: 25.
+- Cadencia: 4 disparos/segundo.
+- Cargador: 8 balas.
+- Recarga: 1.4 segundos.
+- Rango: 30.
+- Spread: 2 grados.
+- Damage autoritativo en host.
+- Bala/tracer visual mejorado.
+- Municion se resetea al inicio de ronda.
+- Disparo mantenido se cancela al morir, al desactivar input y al resetear arma.
+
+### Granada
+
+- 1 granada por ronda.
+- Tecla: `G`.
+- Tambien mouse derecho / left trigger.
+- Damage maximo: 40.
+- Radio: 2.5.
+- Fuse: 1.2 segundos.
+- Fuerza de lanzamiento: 12.
+- Explosion autoritativa en host.
+- Line of sight ajustado para no bloquearse con triggers/cuerpo del jugador.
+
+### Pickups
+
+- Botiquin.
+- Municion.
+- Armadura.
+- Spawns prefijados.
+- Primer spawn: segundo 20.
+- Segundo spawn: segundo 55.
+- Respawn: 15 segundos.
+- Botiquin cura 25.
+- Si el jugador esta full vida, el sobrante puede convertirse en armadura.
+- Armadura suma 30.
+- Pickups no deben salir encima de cajas.
+
+### Habilidades
+
+Hay 3 habilidades seleccionables en lobby.
+
+#### Dash / Carrera Tactica
+
+- Tecla: `Q` o `Space`.
+- Cooldown: 7 segundos.
+- Duracion: 0.3 segundos.
+- Distancia: 4.
+- Velocidad: 15.
+- Se ejecuta en owner para evitar lag.
+- Respeta paredes/cajas.
+- Depenetracion tras dash para evitar quedarse dentro de colision.
+
+#### Escudo Frontal
+
+- Tecla: `Q` o `Space`.
+- Cooldown: 12 segundos.
+- Duracion: 2.5 segundos.
+- HP del escudo: 60.
+- Angulo: 90 grados.
+- Absorbe balas antes de quitar vida.
+- Visual de escudo alrededor/frente del jugador.
+
+#### Mina de Proximidad
+
+- Tecla: `Q` o `Space`.
+- Cooldown: 14 segundos.
+- Damage: 35.
+- Radio: 1.5.
+- Arm delay: 0.5 segundos.
+- Mina spawneada como NetworkObject.
+- No explota instantaneamente al owner.
+- Visual reducido/mejorado respecto a la primera version.
 
 ---
 
-## 7. Build + distribution
+## HUD y UI en partida
 
-### Building locally
+- Timer de ronda o deathmatch.
+- Marcador 1v1.
+- Scoreboard deathmatch.
+- Vida abajo izquierda.
+- Armadura abajo izquierda.
+- Municion abajo derecha.
+- Barra de recarga.
+- Indicador de granada.
+- Indicador de habilidad.
+- Cooldown numerico de habilidad.
+- Reticula de apuntado visible.
+- Overlay grande para intro de ronda, muerte subita y fin de partida.
+- Minimapa/visual de arena ajustado en escena.
+
+---
+
+## Arquitectura tecnica
+
+### Unity
+
+Paquetes principales:
+
+- `com.unity.netcode.gameobjects` 1.11.0.
+- `com.unity.transport` 2.3.0.
+- `com.unity.services.relay` 1.1.1.
+- `com.unity.services.lobby` 1.2.2.
+- `com.unity.services.authentication` 3.3.3.
+- `com.unity.inputsystem` 1.14.0.
+- `com.unity.textmeshpro` 3.2.0-pre.12.
+- `com.unity.ugui` 2.0.0.
+
+### Networking
+
+- Arquitectura host + clientes.
+- Host autoritativo para:
+  - damage
+  - muertes
+  - rondas
+  - victoria
+  - pickups
+  - granadas
+  - minas
+  - respawns
+- Cliente autoritativo para transform propio con `ClientNetworkTransform`.
+- Relay para conexion entre PCs.
+- Lobby para sala/codigo/metadata.
+- Named messages custom para estado de lobby:
+  - `FP_LOBBY_UPDATE`
+  - `FP_LOBBY_STATE`
+
+### Backend
+
+Produccion:
+
+- Supabase Edge Function Deno.
+- Supabase Postgres.
+- Tabla `users`.
+- Tabla `user_stats`.
+- Hash de password con PBKDF2 en Edge Function.
+- JWT HMAC SHA-256.
+
+Fallback local:
+
+- Node 20.
+- Express.
+- Postgres 16 via Docker.
+- JSON file fallback si Postgres no esta disponible.
+
+---
+
+## Escenas
+
+Escenas activas en Build Settings:
+
+```text
+Assets/Scenes/00_Boot.unity
+Assets/Scenes/01_Auth.unity
+Assets/Scenes/02_MainMenu.unity
+Assets/Scenes/03_Lobby.unity
+Assets/Scenes/04_Game.unity
+Assets/Scenes/05_PostMatch.unity
+```
+
+Flujo:
+
+```text
+00_Boot -> 01_Auth -> 02_MainMenu -> 03_Lobby -> 04_Game -> 05_PostMatch / MainMenu
+```
+
+Nota: `05_PostMatch` existe, pero gran parte del resultado final se muestra desde overlay HUD dentro de `04_Game`.
+
+---
+
+## Estructura de carpetas
+
+```text
+Assets/
+  Art/                       Arte 2D y sprites base
+  Audio/                     Audio futuro/minimo
+  Fonts/                     Fuentes
+  Materials/                 Materiales
+  Prefabs/                   Prefabs de gameplay/UI/red
+  Resources/NetworkPrefabs/  Prefabs cargados/registrados en runtime
+  Scenes/                    Escenas principales
+  ScriptableObjects/         Balance, armas, habilidades, mapas
+  Scripts/
+    Abilities/               Dash, shield, mine, controller
+    Auth/                    Login/register REST client + UI
+    Combat/                  Weapon, projectile, grenade, damage
+    Core/                    Bootstrap, config, profile stats, visuals
+    Data/                    Enums y ScriptableObjects
+    Editor/                  Setup/build/smoke utilities
+    Match/                   MatchManager, RoundManager, sudden death, beacon
+    Networking/              Relay, Lobby, session, spawn, transforms
+    Pickups/                 Health, ammo, armor, spawner
+    Player/                  Input, movement, health, aim, presentation
+    UI/                      Main menu, lobby, HUD, results
+Backend/
+  src/server.js              Backend local Node/Express fallback
+  supabase/functions/        Edge Function publica
+  supabase_schema.sql        Schema Supabase
+Tools/
+  BuildWindowsRelease.ps1    Build Windows + zip
+  ApplySupabaseSchema.ps1    Aplica schema en Supabase por DATABASE_URL
+  ConfigureSupabaseBackend.ps1
+  StartAuthBackendRadmin.ps1 Fallback local/Radmin
+  RunLanHost.ps1             Test LAN local
+  RunLanClient.ps1           Test LAN local
+Builds/Release/
+  FrentePartido/             Build Windows extraida
+  FrentePartido-Windows.zip  ZIP para distribuir
+```
+
+---
+
+## Archivos importantes
+
+### Gameplay
+
+```text
+Assets/Scripts/Combat/WeaponController.cs
+Assets/Scripts/Combat/GrenadeController.cs
+Assets/Scripts/Player/PlayerHealth.cs
+Assets/Scripts/Player/PlayerMotor2D.cs
+Assets/Scripts/Abilities/AbilityController.cs
+Assets/Scripts/Abilities/DashAbility.cs
+Assets/Scripts/Abilities/ShieldAbility.cs
+Assets/Scripts/Abilities/MineAbility.cs
+Assets/Scripts/Pickups/HealthPickup.cs
+Assets/Scripts/Pickups/PickupSpawner.cs
+```
+
+### Match y modos
+
+```text
+Assets/Scripts/Match/MatchManager.cs
+Assets/Scripts/Match/RoundManager.cs
+Assets/Scripts/Match/SuddenDeathController.cs
+Assets/Scripts/Data/GameEnums.cs
+Assets/Scripts/Networking/PlayerSpawnManager.cs
+```
+
+### Online
+
+```text
+Assets/Scripts/Networking/NetworkSessionManager.cs
+Assets/Scripts/Networking/RelayConnectionManager.cs
+Assets/Scripts/Networking/LobbyManager.cs
+Assets/Scripts/Networking/ClientNetworkTransform.cs
+Assets/Scripts/Networking/NetworkPrefabRegistry.cs
+```
+
+### UI
+
+```text
+Assets/Scripts/UI/MainMenuUI.cs
+Assets/Scripts/UI/LobbyUI.cs
+Assets/Scripts/UI/HUDController.cs
+Assets/Scripts/UI/ResultsUI.cs
+Assets/Scripts/Core/GameplayVisualNormalizer.cs
+```
+
+### Backend
+
+```text
+Assets/Scripts/Auth/AuthService.cs
+Assets/Scripts/Auth/AuthUI.cs
+Assets/Scripts/Core/ProfileStats.cs
+Backend/supabase/functions/frentepartido-auth/index.ts
+Backend/supabase_schema.sql
+Backend/src/server.js
+```
+
+---
+
+## Datos balanceables
+
+### Balance principal
+
+Archivo:
+
+```text
+Assets/ScriptableObjects/Balance/MainBalance.asset
+```
+
+Valores actuales:
+
+| Campo | Valor |
+|---|---:|
+| Vida maxima | 100 |
+| Velocidad | 5 |
+| Granadas por ronda | 1 |
+| Damage granada | 40 |
+| Radio granada | 2.5 |
+| Fuse granada | 1.2 |
+| Fuerza granada | 12 |
+| Faro activo en | 30s |
+| Captura faro | 5s |
+| Radio faro | 2 |
+| Duracion ronda | 60s |
+| Intro ronda | 3s |
+| Fin ronda | 4s |
+| Muerte subita | 30s |
+| Damage muerte subita | 5/s |
+| Rondas para ganar | 5 |
+| Max rondas | 9 |
+| Deathmatch duracion | 600s |
+| Deathmatch kills para ganar | 20 |
+| Deathmatch respawn | 1.5s |
+| Pickup 1 | 20s |
+| Pickup 2 | 55s |
+| Cura pickup | 25 |
+| Armadura pickup | 30 |
+| Respawn pickup | 15s |
+
+### Fusil
+
+Archivo:
+
+```text
+Assets/ScriptableObjects/Weapons/Rifle_Standard.asset
+```
+
+| Campo | Valor |
+|---|---:|
+| Damage | 25 |
+| Fire rate | 4/s |
+| Cargador | 8 |
+| Recarga | 1.4s |
+| Spread | 2 grados |
+| Rango | 30 |
+
+### Habilidades
+
+Archivos:
+
+```text
+Assets/ScriptableObjects/Abilities/Ability_Dash.asset
+Assets/ScriptableObjects/Abilities/Ability_Shield.asset
+Assets/ScriptableObjects/Abilities/Ability_Mine.asset
+```
+
+| Habilidad | Cooldown | Duracion | Value1 | Value2 |
+|---|---:|---:|---:|---:|
+| Carrera Tactica | 7s | 0.3s | distancia 4 | velocidad 15 |
+| Escudo Frontal | 12s | 2.5s | HP 60 | angulo 90 |
+| Mina de Proximidad | 14s | 0s | damage 35 | radio 1.5 |
+
+### Mapa 1v1
+
+Archivo:
+
+```text
+Assets/ScriptableObjects/Maps/Map_TrincheraPartida.asset
+```
+
+| Campo | Valor |
+|---|---|
+| Nombre | Trinchera Partida |
+| ID | trinchera |
+| Spawn A | `(-9, 0)` |
+| Spawn B | `(9, 0)` |
+| Faro | `(0, 0)` |
+| Bounds | `(-10, -6)` a `(10, 6)` |
+| Pickups | `(-2.8,-4.4)`, `(2.8,4.4)`, `(0,-4.4)` |
+
+Deathmatch usa arena grande generada en runtime desde `PlayerSpawnManager`.
+
+---
+
+## Controles
+
+| Accion | Tecla / input |
+|---|---|
+| Mover | WASD / flechas / left stick |
+| Apuntar | Raton |
+| Disparar | Click izquierdo / right trigger |
+| Recargar | R / X gamepad |
+| Granada | G / click derecho / left trigger |
+| Habilidad | Q / Space / B gamepad |
+| Pausa | Esc / Start |
+
+---
+
+## Build Windows
+
+Comando:
+
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\Tools\BuildWindowsRelease.ps1
 ```
 
-The script (`Tools\BuildWindowsRelease.ps1`) runs Unity in batch mode (`-executeMethod FrentePartido.Editor.StandaloneSmokeBuild.BuildWindowsRelease`) and produces:
+Salida:
 
-- `Builds\Release\FrentePartido\FrentePartido.exe` — the player binary
-- `Builds\Release\FrentePartido-Windows.zip` — the same folder zipped for hand-delivery
-
-If the zip step fails with "el archivo está siendo utilizado en otro proceso" the running game holds the data files — close every `FrentePartido.exe` and re-run the script (or `Compress-Archive -Path 'Builds\Release\FrentePartido\*' -DestinationPath 'Builds\Release\FrentePartido-Windows.zip' -Force` directly).
-
-### Distributing to a friend
-The `Builds/` folder is **tracked in git** (`.gitignore` excludes `[Bb]uild/` only, not `[Bb]uilds/`). The current Unity build for Windows lives in `Builds/Release/FrentePartido/` plus the matching zip.
-
-- Friend has cloned the repo: `git pull` and the new exe + DLLs land under `Builds/Release/FrentePartido/`. They run `CLIENT_RADMIN.bat` and join.
-- Friend has only the zip: extract it on top of the existing folder.
-
-### One-click launch scripts
-- `HOST_RADMIN.bat` — starts the auth backend (via `Tools\StartAuthBackendRadmin.ps1`) then launches `Builds\Release\FrentePartido\FrentePartido.exe`.
-- `CLIENT_RADMIN.bat` — just launches the same exe (no backend needed).
-
----
-
-## 8. Important fixes applied during development
-
-This is the chronological list of in-engine bugs that were fixed and are worth knowing about when something drifts again:
-
-1. **HUD never updated**: `HUDController.Initialize()` was never called. Now `HUDController.Update` auto-binds to `NetworkManager.Singleton.SpawnManager.GetLocalPlayerObject()` on the first frame the local player exists, then pushes initial values into the UI manually because `NetworkVariable` initial sync skips `OnValueChanged`.
-2. **Round end never fired**: `RoundManager.RegisterPlayers` was never called. `RoundManager.Update` (server) now auto-discovers both `PlayerHealth` instances via `NetworkGameState.Player1ClientId` / `Player2ClientId`.
-3. **HP / armor bars didn't visually fill**: the saved scene had `Image.Type = Simple` so `fillAmount` was a no-op. `GameplayVisualNormalizer.SkinHud` now forces `Type = Filled / FillMethod = Horizontal / FillOrigin = Left` and assigns a 4×4 white sprite generated at runtime (`Resources.GetBuiltinResource` is editor-only, returns null in builds).
-4. **Client lag**: server-authoritative `NetworkTransform` rubber-banded the client one RTT behind. Replaced with `ClientNetworkTransform` (owner-authoritative) on the Player prefab.
-5. **Ability did not fire on the client**: dash needs to run on the owner since the server can no longer write the client's transform. `AbilityController.HandleAbilityInput` runs the dash locally first, then sends the cooldown RPC.
-6. **Grenades never exploded on damage**: the LOS check was using `obstacleLayer = ~0` so the linecast hit the player's own collider / triggers. Replaced with `HasClearGrenadeLineOfSight` that only treats `Wall_*`, `Cover_*`, `Decor_Crate*`, `Decor_Barrel*` as obstacles.
-7. **Lobby ability text invisible**: the `HorizontalLayoutGroup` was collapsing children. Switched to manual 1/3 anchors via `AbilityBtnAt` and explicitly assigned `LiberationSans SDF` on every Txt.
-8. **Mode flip reverted to 1v1**: `SelectMode` rebuilt slots before pushing the new mode to `NetworkSessionManager`, and the periodic refresh inside `UpdatePlayerList` then re-entered `SelectMode(Rounds1v1, false)` immediately. Order swapped — `SetGameMode` now runs first.
-9. **Joiner showed up as "Jugador 3"**: the first `SendLocalLobbyInfo` sometimes fires before `IsListening` flips true. Added `RepublishBootstrap` so the lobby state is re-sent at +0.4 s, +1 s, +2 s, +4 s.
-10. **DM client final score off by one**: `Player1Kills` / `Player2Kills` `NetworkVariable` updates raced the `NotifyMatchEndClientRpc`. `EndMatch` now caches `FinalP1Score` / `FinalP2Score` and the ClientRpc carries the values explicitly.
-11. **DM spawns on top of each other / players stuck**: `GetDeathmatchSpawn` now uses `MapDefinition.deathmatchSpawnPoints` distributed by actual player count, and `PlayerMotor2D` clamps to `RuntimeMatchSettings.BoundsMin/Max` (not the 1v1 box) when in deathmatch.
-12. **Dash phased through walls**: `ResolveBlockingDelta` lowered the normal-vs-direction dot threshold from 0.35 to 0.05; added `DepenetrateFromBlockers` which is called at dash end to push the player out of any wall it clipped.
-
----
-
-## 9. Things still on the radar
-
-- DM spawn count adjusts dynamically; visual spawn markers under `~DeathmatchArena` always show 10 regardless of actual player count.
-- Beacon mechanic exists in code (`BeaconCaptureController`) but is currently sidelined since neither mode uses it as a primary objective.
-- No replays / spectator mode.
-- The match-end overlay reuses the in-game HUD — `05_PostMatch` scene is largely cosmetic right now.
-
----
-
-## 10. Quick reference
-
-```powershell
-# Start backend on the host PC (run once per session)
-.\HOST_RADMIN.bat                   # backend + game in one click
-
-# Build a fresh Windows release
-.\Tools\BuildWindowsRelease.ps1
-
-# Send to a friend
-git push                            # they pull from master
-# or hand them Builds\Release\FrentePartido-Windows.zip
+```text
+Builds/Release/FrentePartido/FrentePartido.exe
+Builds/Release/FrentePartido-Windows.zip
 ```
 
-```bash
-# Sanity-check the live auth backend (Supabase) from anywhere
+El script usa:
+
+```text
+C:\Program Files\Unity\Hub\Editor\2022.3.62f1\Editor\Unity.exe
+```
+
+Metodo Unity llamado:
+
+```text
+FrentePartido.Editor.StandaloneSmokeBuild.BuildWindowsRelease
+```
+
+Log:
+
+```text
+Temp/unity-release-build.log
+```
+
+---
+
+## Scripts de ayuda
+
+### Cliente normal
+
+```text
+CLIENT_RADMIN.bat
+```
+
+Hace:
+
+```text
+start Builds/Release/FrentePartido/FrentePartido.exe
+```
+
+### Host antiguo/Radmin/local
+
+```text
+HOST_RADMIN.bat
+```
+
+Hace:
+
+```text
+Tools/StartAuthBackendRadmin.ps1 -Port 3001
+start Builds/Release/FrentePartido/FrentePartido.exe
+```
+
+Importante: ya no es necesario para Supabase. Solo usar si quieres levantar backend local Docker/Radmin para desarrollo o fallback.
+
+### Aplicar schema Supabase
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Tools\ApplySupabaseSchema.ps1
+```
+
+### Configurar backend Supabase local
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Tools\ConfigureSupabaseBackend.ps1
+```
+
+---
+
+## API backend
+
+Base URL:
+
+```text
+https://kufkgjyeptuzptmegsmf.supabase.co/functions/v1/frentepartido-auth
+```
+
+Endpoints:
+
+| Metodo | Ruta | Auth | Uso |
+|---|---|---|---|
+| GET | `/health` | No | Verificar servicio |
+| POST | `/auth/register` | No | Crear cuenta |
+| POST | `/auth/login` | No | Iniciar sesion |
+| GET | `/auth/verify` | Bearer JWT | Validar token |
+| GET | `/profile/stats` | Bearer JWT | Leer stats |
+| POST | `/profile/match` | Bearer JWT | Registrar resultado |
+
+Registro:
+
+```json
+{
+  "username": "peke",
+  "email": "peke@example.com",
+  "password": "123456",
+  "displayName": "Peke"
+}
+```
+
+Login:
+
+```json
+{
+  "username": "peke",
+  "password": "123456"
+}
+```
+
+Resultado partida:
+
+```json
+{
+  "won": true
+}
+```
+
+---
+
+## Base de datos
+
+Schema:
+
+```text
+Backend/supabase_schema.sql
+```
+
+Tablas:
+
+### `users`
+
+- `id`
+- `username`
+- `email`
+- `password_hash`
+- `display_name`
+- `created_at`
+- `last_login`
+
+### `user_stats`
+
+- `user_id`
+- `matches_played`
+- `wins`
+- `losses`
+- `updated_at`
+
+Rangos calculados por backend:
+
+| Condicion | Rango |
+|---|---|
+| 0 partidas | SIN RANGO |
+| 4+ wins | BRONCE |
+| 10+ wins y 50%+ winrate | PLATA |
+| 18+ wins y 60%+ winrate | ORO |
+| 30+ wins y 70%+ winrate | ELITE |
+| otro caso con partidas | RECLUTA |
+
+---
+
+## Testing manual recomendado
+
+### Smoke rapido local
+
+1. Abrir `FrentePartido.exe`.
+2. Comprobar login/autologin.
+3. Crear sala.
+4. Entrar a lobby.
+5. Cambiar modo 1v1/deathmatch.
+6. Cambiar habilidad.
+7. Salir sin errores.
+
+### Test 1v1 real
+
+1. Host crea sala.
+2. Cliente entra con codigo.
+3. Ambos ven nombres correctos.
+4. Ambos pulsan listo.
+5. Host inicia.
+6. Verificar spawn: host izquierda, cliente derecha.
+7. Verificar que nadie se mueve antes del overlay `PELEAD`.
+8. Disparar: baja vida del rival.
+9. Matar: termina ronda.
+10. Nueva ronda: no queda disparo automatico pegado.
+11. Municion vuelve a 8/8.
+12. Botiquin cura si falta vida.
+13. Botiquin a full vida da armadura/sobrante.
+14. Granada hace damage.
+15. Escudo bloquea balas.
+16. Dash no atraviesa cajas.
+17. Mina explota al rival.
+18. Al llegar a 5 rondas, acaba partida.
+19. Stats suben en perfil.
+
+### Test deathmatch
+
+1. Host crea sala.
+2. Cambia modo a `DEATHMATCH`.
+3. Entran 2 a 10 jugadores.
+4. Todos listos.
+5. Host inicia.
+6. Verificar mapa grande.
+7. Verificar spawns separados.
+8. Matar a jugador: suma kill.
+9. Victima respawnea.
+10. Killer recupera granada.
+11. Primer jugador a 20 kills gana.
+12. Si pasan 10 minutos, gana top score.
+
+---
+
+## Bugs importantes ya corregidos
+
+- NetworkConfig mismatch por prefabs no registrados.
+- Client `NetworkPrefab could not be found`.
+- Cliente aparecia en el centro al iniciar ronda.
+- Cliente podia rubberbandear por server-authoritative transform.
+- Lobby no actualizaba nombres y salia `Jugador 2`.
+- Lobby hacia demasiados refresh y daba `Too Many Requests`.
+- Cajas atravesables por cliente.
+- Balas poco visibles.
+- Botiquines encima de cajas.
+- Botiquines no curaban por encima de 50.
+- Full vida no convertia heal sobrante en armor.
+- Escudo visual sin bloquear damage.
+- Dash sin desplazamiento real.
+- Mina demasiado grande/fea.
+- Cooldown de habilidades sin feedback correcto.
+- HUD de vida/armor mal posicionado.
+- Bordes negros molestos en juego.
+- Muerte subita dejaba jugador bloqueado.
+- Muerte subita ya rompe cobertura.
+- Arma desaparecia o no dejaba disparar tras estados raros.
+- Disparo quedaba mantenido tras matar y empezaba siguiente ronda disparando.
+- Estadisticas locales migradas a Supabase.
+- README anterior con datos desfasados/encoding roto.
+
+---
+
+## Limitaciones conocidas
+
+- El juego todavia no tiene matchmaking publico.
+- No hay ranking global visible tipo leaderboard.
+- `05_PostMatch` existe, pero el flujo usa overlay de HUD para resultado.
+- El faro (`BeaconCaptureController`) existe, pero el modo principal actual prioriza kill/rondas y muerte subita.
+- Audio/VFX existen de forma minima; no es una capa final profesional.
+- Deathmatch usa mapa generado por runtime, no escena artistica separada final.
+- Build Windows es la prioridad; no hay build Android/iOS.
+
+---
+
+## Requisitos para desarrollar
+
+- Unity 2022.3.62f1.
+- Windows recomendado.
+- Git.
+- PowerShell.
+- Node/Docker solo si se toca backend local fallback.
+- Cuenta/proyecto Unity Services configurado para Lobby/Relay.
+- Proyecto Supabase ya creado para backend cloud.
+
+---
+
+## Comandos utiles
+
+```powershell
+# Ver estado git
+git status --short
+
+# Build Windows
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Tools\BuildWindowsRelease.ps1
+
+# Health Supabase
 curl https://kufkgjyeptuzptmegsmf.supabase.co/functions/v1/frentepartido-auth/health
-# {"status":"ok"}
+
+# Lanzar exe
+.\Builds\Release\FrentePartido\FrentePartido.exe
+```
+
+---
+
+## Notas para futuras mejoras
+
+Prioridad tecnica siguiente:
+
+1. Test real deathmatch con 3+ PCs.
+2. Mejorar visual final de mapa deathmatch.
+3. Leaderboard global en Supabase.
+4. Pantalla `05_PostMatch` completa en vez de overlay.
+5. Mas feedback de impacto/audio.
+6. Reconexion controlada si cliente cae.
+7. Opcion de region/diagnostico de Relay.
+8. Capturas oficiales del juego para README.
+
+---
+
+## Capturas
+
+No hay capturas versionadas actualmente en el repo. Cuando se quieran incluir, guardar imagenes en:
+
+```text
+Docs/Screenshots/
+```
+
+Y enlazarlas asi:
+
+```md
+![Menu](Docs/Screenshots/menu.png)
+![Lobby](Docs/Screenshots/lobby.png)
+![Gameplay](Docs/Screenshots/gameplay.png)
 ```

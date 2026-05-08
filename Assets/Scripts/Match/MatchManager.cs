@@ -215,6 +215,9 @@ namespace FrentePartido.Match
             var netState = Networking.NetworkGameState.Instance;
             if (netState == null) return false;
 
+            // Reward the killer with a fresh grenade. Works in both 1v1 and DM modes.
+            RefillKillerGrenadeServer(killerClientId);
+
             AddDeathmatchKill(killerClientId);
             byte killerKills = GetDeathmatchKills(killerClientId);
 
@@ -287,6 +290,18 @@ namespace FrentePartido.Match
                 PlayerName = new FixedString64Bytes(playerName),
                 Kills = 0
             });
+        }
+
+        private static void RefillKillerGrenadeServer(ulong killerClientId)
+        {
+            var nm = Unity.Netcode.NetworkManager.Singleton;
+            if (nm == null || nm.SpawnManager == null) return;
+            if (!nm.ConnectedClients.TryGetValue(killerClientId, out var client)) return;
+            if (client.PlayerObject == null) return;
+
+            var weapon = client.PlayerObject.GetComponent<Combat.WeaponController>();
+            if (weapon != null)
+                weapon.GrenadesRemaining.Value = Mathf.Max(weapon.GrenadesRemaining.Value, 1);
         }
 
         private void AddDeathmatchKill(ulong killerClientId)

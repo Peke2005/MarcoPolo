@@ -271,7 +271,7 @@ namespace FrentePartido.Networking
 
             int slotIndex = _joinOrder.IndexOf(clientId);
             Vector2 spawnPos = IsDeathmatchMode()
-                ? GetDeathmatchSpawn(slotIndex)
+                ? GetRandomDeathmatchSpawn(clientId)
                 : (slotIndex == 0 ? _mapDefinition.spawnPointA : _mapDefinition.spawnPointB);
 
             MoveNetworkPlayer(netObj, new Vector3(spawnPos.x, spawnPos.y, 0f));
@@ -321,6 +321,46 @@ namespace FrentePartido.Networking
             return new Vector2(Mathf.Cos(angle) * 16.5f, Mathf.Sin(angle) * 9.0f);
         }
 
+        // Random spawn for DM respawns. Picks from the curated DM points and prefers
+        // the one furthest from every other living player so respawning never drops
+        // you right next to a killer.
+        private Vector2 GetRandomDeathmatchSpawn(ulong selfClientId)
+        {
+            Vector2[] options = (_mapDefinition != null && _mapDefinition.deathmatchSpawnPoints != null && _mapDefinition.deathmatchSpawnPoints.Length > 0)
+                ? _mapDefinition.deathmatchSpawnPoints
+                : new[] { GetDeathmatchSpawnVisual(0), GetDeathmatchSpawnVisual(2), GetDeathmatchSpawnVisual(5), GetDeathmatchSpawnVisual(7) };
+
+            // Collect living opponent positions on the server.
+            var others = new List<Vector2>();
+            foreach (var kv in _spawnedPlayers)
+            {
+                if (kv.Key == selfClientId) continue;
+                if (kv.Value == null || !kv.Value.IsSpawned) continue;
+                var hp = kv.Value.GetComponent<PlayerHealth>();
+                if (hp != null && hp.IsDead) continue;
+                others.Add((Vector2)kv.Value.transform.position);
+            }
+
+            // Score each candidate by min distance to any opponent. Pick best two and
+            // randomize between them so spawns aren't deterministic.
+            int bestA = 0, bestB = 0;
+            float bestADist = -1f, bestBDist = -1f;
+            for (int i = 0; i < options.Length; i++)
+            {
+                float d = float.PositiveInfinity;
+                foreach (var o in others)
+                {
+                    float dd = Vector2.Distance(options[i], o);
+                    if (dd < d) d = dd;
+                }
+                if (d > bestADist) { bestBDist = bestADist; bestB = bestA; bestADist = d; bestA = i; }
+                else if (d > bestBDist) { bestBDist = d; bestB = i; }
+            }
+
+            int pick = (UnityEngine.Random.value < 0.6f || bestADist == bestBDist) ? bestA : bestB;
+            return options[pick];
+        }
+
         private Vector2 GetDeathmatchSpawn(int slotIndex)
         {
             // Use the curated DeathmatchSpawnPoints from the map when present, picking
@@ -358,12 +398,41 @@ namespace FrentePartido.Networking
             DestroyIfExists("~DeathmatchArena");
 
             var root = new GameObject("~DeathmatchArena");
-            AddPiece(root, "Floor", Vector2.zero, new Vector2(44f, 26f), new Color(0.22f, 0.37f, 0.23f, 1f), false, -100);
-            AddPiece(root, "Wall_Top", new Vector2(0f, 13.3f), new Vector2(44f, 0.7f), new Color(0.55f, 0.34f, 0.16f, 1f), true, 5);
-            AddPiece(root, "Wall_Bottom", new Vector2(0f, -13.3f), new Vector2(44f, 0.7f), new Color(0.55f, 0.34f, 0.16f, 1f), true, 5);
-            AddPiece(root, "Wall_Left", new Vector2(-22.3f, 0f), new Vector2(0.7f, 26f), new Color(0.55f, 0.34f, 0.16f, 1f), true, 5);
-            AddPiece(root, "Wall_Right", new Vector2(22.3f, 0f), new Vector2(0.7f, 26f), new Color(0.55f, 0.34f, 0.16f, 1f), true, 5);
 
+            // Layered floor: dark grass base + lighter inset for depth.
+            AddPiece(root, "Floor", Vector2.zero, new Vector2(44f, 26f), new Color(0.16f, 0.30f, 0.18f, 1f), false, -100);
+            AddPiece(root, "Floor_Inset", Vector2.zero, new Vector2(42f, 24f), new Color(0.24f, 0.42f, 0.26f, 1f), false, -99);
+            // Subtle radial vignette in the corners using soft tinted overlays.
+            AddPiece(root, "Tint_TL", new Vector2(-15f,  9f), new Vector2(14f, 10f), new Color(0.35f, 0.55f, 0.32f, 0.18f), false, -97);
+            AddPiece(root, "Tint_TR", new Vector2( 15f,  9f), new Vector2(14f, 10f), new Color(0.35f, 0.55f, 0.32f, 0.18f), false, -97);
+            AddPiece(root, "Tint_BL", new Vector2(-15f, -9f), new Vector2(14f, 10f), new Color(0.35f, 0.55f, 0.32f, 0.18f), false, -97);
+            AddPiece(root, "Tint_BR", new Vector2( 15f, -9f), new Vector2(14f, 10f), new Color(0.35f, 0.55f, 0.32f, 0.18f), false, -97);
+            // Faint grid lines for spatial reference.
+            for (int x = -18; x <= 18; x += 6)
+                AddPiece(root, "Grid_V_" + x, new Vector2(x, 0f), new Vector2(0.06f, 24f), new Color(0f, 0f, 0f, 0.12f), false, -96);
+            for (int y = -9; y <= 9; y += 6)
+                AddPiece(root, "Grid_H_" + y, new Vector2(0f, y), new Vector2(42f, 0.06f), new Color(0f, 0f, 0f, 0.12f), false, -96);
+
+            // Outer brick walls.
+            Color wallTone = new Color(0.55f, 0.34f, 0.16f, 1f);
+            AddPiece(root, "Wall_Top",    new Vector2(0f,  13.3f), new Vector2(44f, 0.7f), wallTone, true, 5);
+            AddPiece(root, "Wall_Bottom", new Vector2(0f, -13.3f), new Vector2(44f, 0.7f), wallTone, true, 5);
+            AddPiece(root, "Wall_Left",   new Vector2(-22.3f, 0f), new Vector2(0.7f, 26f), wallTone, true, 5);
+            AddPiece(root, "Wall_Right",  new Vector2( 22.3f, 0f), new Vector2(0.7f, 26f), wallTone, true, 5);
+
+            // Central blocked zone: 4 walls forming a closed bunker so nobody can
+            // camp the middle. Walls stop short of each other to look intentional
+            // rather than a single black box.
+            Color centerWall = new Color(0.42f, 0.26f, 0.12f, 1f);
+            AddPiece(root, "Wall_Center_Top",    new Vector2(0f,  3f), new Vector2(7.5f, 0.6f), centerWall, true, 6);
+            AddPiece(root, "Wall_Center_Bottom", new Vector2(0f, -3f), new Vector2(7.5f, 0.6f), centerWall, true, 6);
+            AddPiece(root, "Wall_Center_Left",   new Vector2(-3.7f, 0f), new Vector2(0.6f, 6.6f), centerWall, true, 6);
+            AddPiece(root, "Wall_Center_Right",  new Vector2( 3.7f, 0f), new Vector2(0.6f, 6.6f), centerWall, true, 6);
+            // Inner tinted floor of the bunker so it reads as a separate area.
+            AddPiece(root, "Center_Floor", Vector2.zero, new Vector2(7f, 5.6f), new Color(0.10f, 0.18f, 0.12f, 1f), false, -95);
+            AddPiece(root, "Center_Glow",  Vector2.zero, new Vector2(8.5f, 7.1f), new Color(1f, 0.78f, 0.18f, 0.06f), false, -94);
+
+            // 10 spawn marker discs around the play area.
             for (int i = 0; i < 10; i++)
             {
                 Vector2 p = GetDeathmatchSpawnVisual(i);
@@ -372,22 +441,34 @@ namespace FrentePartido.Networking
                     false, -50);
             }
 
-            Vector2[] cover =
+            // Cover crates spread around the perimeter, away from spawns and center.
+            Color crateTone = new Color(0.50f, 0.27f, 0.12f, 1f);
+            (Vector2 pos, Vector2 size)[] cover =
             {
-                new Vector2(-12f, 6f), new Vector2(-6f, 0f), new Vector2(-12f, -6f),
-                new Vector2(12f, 6f), new Vector2(6f, 0f), new Vector2(12f, -6f),
-                new Vector2(0f, 8f), new Vector2(0f, -8f), new Vector2(-3f, 4f), new Vector2(3f, -4f)
+                (new Vector2(-14f,  6f), new Vector2(2.6f, 0.9f)),
+                (new Vector2(-14f, -6f), new Vector2(2.6f, 0.9f)),
+                (new Vector2( 14f,  6f), new Vector2(2.6f, 0.9f)),
+                (new Vector2( 14f, -6f), new Vector2(2.6f, 0.9f)),
+                (new Vector2( -8f,  9f), new Vector2(0.9f, 2.4f)),
+                (new Vector2(  8f,  9f), new Vector2(0.9f, 2.4f)),
+                (new Vector2( -8f, -9f), new Vector2(0.9f, 2.4f)),
+                (new Vector2(  8f, -9f), new Vector2(0.9f, 2.4f)),
+                (new Vector2(-18f,  3f), new Vector2(0.9f, 2.0f)),
+                (new Vector2( 18f, -3f), new Vector2(0.9f, 2.0f)),
             };
             for (int i = 0; i < cover.Length; i++)
             {
-                AddPiece(root, "Decor_Crate_DM_" + i, cover[i],
-                    i % 3 == 0 ? new Vector2(3.2f, 0.9f) : new Vector2(1.2f, 2.4f),
-                    new Color(0.50f, 0.27f, 0.12f, 1f), true, 8);
+                AddPiece(root, "Decor_Crate_DM_" + i, cover[i].pos, cover[i].size, crateTone, true, 8);
+                // Drop shadow under each crate for depth.
+                AddPiece(root, "CrateShadow_" + i,
+                    new Vector2(cover[i].pos.x + 0.12f, cover[i].pos.y - 0.18f),
+                    cover[i].size * 1.05f,
+                    new Color(0f, 0f, 0f, 0.30f), false, 7);
             }
 
             Camera cam = Camera.main;
             if (cam != null)
-                cam.orthographicSize = 7.2f;
+                cam.orthographicSize = 9.5f;
         }
 
         private static void DestroyIfExists(string name)

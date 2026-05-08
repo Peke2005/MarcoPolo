@@ -519,10 +519,12 @@ namespace FrentePartido.UI
             rows.Sort((a, b) => b.Kills.CompareTo(a.Kills));
 
             int limit = Mathf.Min(5, rows.Count);
-            System.Text.StringBuilder sb = new System.Text.StringBuilder("DEATHMATCH\n");
+            System.Text.StringBuilder sb = new System.Text.StringBuilder("DM\n");
             for (int i = 0; i < limit; i++)
                 sb.Append(rows[i].PlayerName).Append("  ").Append(rows[i].Kills).Append('\n');
             _roundScoreText.text = sb.ToString().TrimEnd();
+            _roundScoreText.enableWordWrapping = false;
+            _roundScoreText.overflowMode = TextOverflowModes.Overflow;
         }
 
         private void UpdateBeaconState(BeaconState state)

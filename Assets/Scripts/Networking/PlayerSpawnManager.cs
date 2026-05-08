@@ -420,26 +420,12 @@ namespace FrentePartido.Networking
             AddPiece(root, "Wall_Left",   new Vector2(-22.3f, 0f), new Vector2(0.7f, 26f), wallTone, true, 5);
             AddPiece(root, "Wall_Right",  new Vector2( 22.3f, 0f), new Vector2(0.7f, 26f), wallTone, true, 5);
 
-            // Central bunker WITH doorways: each side has a 1.6u opening so players
-            // can fight through it for cover. Walls are 0.9u thick to keep dashes
-            // from clipping through.
-            Color centerWall = new Color(0.42f, 0.26f, 0.12f, 1f);
-            // Top wall split around opening
-            AddPiece(root, "Wall_Center_Top_L", new Vector2(-2.45f,  3f), new Vector2(2.6f, 0.9f), centerWall, true, 6);
-            AddPiece(root, "Wall_Center_Top_R", new Vector2( 2.45f,  3f), new Vector2(2.6f, 0.9f), centerWall, true, 6);
-            // Bottom wall split
-            AddPiece(root, "Wall_Center_Bottom_L", new Vector2(-2.45f, -3f), new Vector2(2.6f, 0.9f), centerWall, true, 6);
-            AddPiece(root, "Wall_Center_Bottom_R", new Vector2( 2.45f, -3f), new Vector2(2.6f, 0.9f), centerWall, true, 6);
-            // Left wall split
-            AddPiece(root, "Wall_Center_Left_T", new Vector2(-3.7f,  2.0f), new Vector2(0.9f, 2.4f), centerWall, true, 6);
-            AddPiece(root, "Wall_Center_Left_B", new Vector2(-3.7f, -2.0f), new Vector2(0.9f, 2.4f), centerWall, true, 6);
-            // Right wall split
-            AddPiece(root, "Wall_Center_Right_T", new Vector2( 3.7f,  2.0f), new Vector2(0.9f, 2.4f), centerWall, true, 6);
-            AddPiece(root, "Wall_Center_Right_B", new Vector2( 3.7f, -2.0f), new Vector2(0.9f, 2.4f), centerWall, true, 6);
-
-            // Inner tinted floor of the bunker so it reads as a separate area.
-            AddPiece(root, "Center_Floor", Vector2.zero, new Vector2(7f, 5.6f), new Color(0.10f, 0.18f, 0.12f, 1f), false, -95);
-            AddPiece(root, "Center_Glow",  Vector2.zero, new Vector2(8.5f, 7.1f), new Color(1f, 0.78f, 0.18f, 0.06f), false, -94);
+            // Central plaza: no walls, fully open from every direction. Just a
+            // tinted floor and a soft glow so the area reads as a focal point.
+            AddPiece(root, "Center_Floor", Vector2.zero, new Vector2(7f, 5.6f), new Color(0.18f, 0.30f, 0.20f, 1f), false, -95);
+            AddPiece(root, "Center_Glow",  Vector2.zero, new Vector2(9.0f, 7.5f), new Color(1f, 0.78f, 0.18f, 0.10f), false, -94);
+            // Marker dot in the middle so the plaza is recognizable on the minimap.
+            AddPiece(root, "Center_Marker", Vector2.zero, new Vector2(0.9f, 0.9f), new Color(1f, 0.86f, 0.30f, 0.85f), false, -90);
 
             // 10 spawn marker discs around the play area.
             for (int i = 0; i < 10; i++)

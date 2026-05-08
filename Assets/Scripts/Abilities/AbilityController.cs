@@ -3,7 +3,6 @@ using Unity.Netcode;
 using UnityEngine;
 using FrentePartido.Data;
 using FrentePartido.Player;
-using FrentePartido.Core;
 
 namespace FrentePartido.Abilities
 {
@@ -79,9 +78,6 @@ namespace FrentePartido.Abilities
             if (IsServer)
                 ApplyAbilityFromLobby();
 
-            if (IsOwner && !IsServer)
-                SubmitOwnerAbilityServerRpc(GameConfig.Preferences.abilityIndex);
-
             if (IsOwner && _input != null)
             {
                 _input.OnAbilityPressed += HandleAbilityInput;
@@ -98,7 +94,7 @@ namespace FrentePartido.Abilities
             var lobby = session.GetLobbyPlayers();
             if (lobby == null) return;
 
-            int chosenIndex = IsOwner ? GameConfig.Preferences.abilityIndex : -1;
+            int chosenIndex = -1;
             foreach (var info in lobby)
             {
                 if (info.ClientId == OwnerClientId)
@@ -111,16 +107,6 @@ namespace FrentePartido.Abilities
             if (chosenIndex < 0 || chosenIndex >= availableAbilities.Length) return;
             EquippedAbilityIndex.Value = chosenIndex;
             Debug.Log($"[AbilityController] Player {OwnerClientId} equipped index {chosenIndex} from lobby selection.");
-        }
-
-        [ServerRpc]
-        private void SubmitOwnerAbilityServerRpc(int index, ServerRpcParams rpcParams = default)
-        {
-            if (rpcParams.Receive.SenderClientId != OwnerClientId) return;
-            if (index < 0 || availableAbilities == null || index >= availableAbilities.Length) return;
-
-            EquippedAbilityIndex.Value = index;
-            Debug.Log($"[AbilityController] Player {OwnerClientId} equipped index {index} from owner preference.");
         }
 
         public override void OnNetworkDespawn()

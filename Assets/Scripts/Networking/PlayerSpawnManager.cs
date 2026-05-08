@@ -396,6 +396,7 @@ namespace FrentePartido.Networking
             DestroyIfExists("~ArenaDecor");
             DestroyIfExists("~ArenaAccents");
             DestroyIfExists("~DeathmatchArena");
+            DestroyDeathmatchBlockingScenePieces();
 
             var root = new GameObject("~DeathmatchArena");
 
@@ -470,6 +471,27 @@ namespace FrentePartido.Networking
         {
             var go = GameObject.Find(name);
             if (go != null) Destroy(go);
+        }
+
+        private static void DestroyDeathmatchBlockingScenePieces()
+        {
+            // The 1v1 scene contains static walls/cover around the middle. In DM
+            // those colliders must be removed, otherwise the larger runtime arena
+            // looks open but the old invisible/underlaid colliders still block it.
+            var all = FindObjectsByType<GameObject>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (var go in all)
+            {
+                if (go == null) continue;
+                string n = go.name;
+                if (n.StartsWith("Wall_") ||
+                    n.StartsWith("Cover_") ||
+                    n.StartsWith("Decor_Crate") ||
+                    n.StartsWith("Decor_Barrel") ||
+                    n.StartsWith("Obstacle_"))
+                {
+                    Destroy(go);
+                }
+            }
         }
 
         private static void AddPiece(GameObject root, string name, Vector2 pos, Vector2 size, Color color, bool collider, int sorting)

@@ -743,6 +743,7 @@ namespace FrentePartido.UI
         {
             _selectedAbility = Mathf.Clamp(index, 0, 2);
             GameConfig.Preferences.abilityIndex = _selectedAbility;
+            GameConfig.Save();
 
             if (_selectedAbilityText != null)
                 _selectedAbilityText.text = AB_ICON[_selectedAbility] + " " + AB_NAME[_selectedAbility];
@@ -786,6 +787,7 @@ namespace FrentePartido.UI
         {
             _selectedFaction = faction;
             GameConfig.Preferences.colorIndex = faction;
+            GameConfig.Save();
 
             if (_blueHighlight != null) _blueHighlight.enabled = faction == 0;
             if (_redHighlight != null)  _redHighlight.enabled  = faction == 1;

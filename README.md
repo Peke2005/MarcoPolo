@@ -160,6 +160,7 @@ Respuesta esperada:
 - Si se acaba el tiempo, gana quien tenga mas kills.
 - Mapa runtime mas grande que el 1v1.
 - Bounds runtime: `-22,-13` a `22,13`.
+- El mapa deathmatch limpia paredes/coberturas de la escena 1v1 antes de construir la arena, para que el centro quede realmente abierto y accesible.
 - Spawns distribuidos para hasta 10 jugadores.
 - Respawn tras morir.
 - Delay de respawn: 1.5 segundos.
@@ -309,6 +310,7 @@ Paquetes principales:
 - Cliente autoritativo para transform propio con `ClientNetworkTransform`.
 - Relay para conexion entre PCs.
 - Lobby para sala/codigo/metadata.
+- La habilidad equipada al empezar partida se toma de la seleccion del lobby; no se permite que una preferencia local vieja sobrescriba la eleccion real.
 - Named messages custom para estado de lobby:
   - `FP_LOBBY_UPDATE`
   - `FP_LOBBY_STATE`
@@ -812,6 +814,8 @@ Rangos calculados por backend:
 - Disparo quedaba mantenido tras matar y empezaba siguiente ronda disparando.
 - Estadisticas locales migradas a Supabase.
 - README anterior con datos desfasados/encoding roto.
+- Deathmatch parecia abierto pero seguia bloqueado por colliders antiguos del mapa 1v1.
+- Seleccionar escudo podia acabar equipando mina por una preferencia local vieja; ahora manda el estado autoritativo del lobby.
 
 ---
 

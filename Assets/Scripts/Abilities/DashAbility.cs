@@ -102,6 +102,10 @@ namespace FrentePartido.Abilities
                 yield return null;
             }
 
+            // Push out of any wall the dash partially clipped before re-enabling
+            // normal movement so the player can't end up stuck inside a crate.
+            motor.DepenetrateFromBlockers();
+
             // Re-enable movement
             motor.SetMovementEnabled(true);
             _isDashing = false;

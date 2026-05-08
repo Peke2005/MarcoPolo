@@ -229,7 +229,7 @@ namespace FrentePartido.Player
                 layerMask = Physics2D.DefaultRaycastLayers
             };
 
-            int count = _bodyCollider.Cast(dir, filter, _moveHits, distance + 0.04f);
+            int count = _bodyCollider.Cast(dir, filter, _moveHits, distance + 0.05f);
             float allowed = distance;
             for (int i = 0; i < count; i++)
             {
@@ -237,13 +237,52 @@ namespace FrentePartido.Player
                 if (col == null || col == _bodyCollider) continue;
                 if (col.attachedRigidbody != null && col.attachedRigidbody == _rb) continue;
                 if (!IsBlockingCollider(col)) continue;
-                if (Vector2.Dot(_moveHits[i].normal, -dir) < 0.35f) continue;
+                // Lowered the dot-threshold — at 0.35 a dash that grazed a wall at
+                // a steep angle was passing right through. 0.05 still rejects pure
+                // tangents but catches the diagonal hits.
+                if (Vector2.Dot(_moveHits[i].normal, -dir) < 0.05f) continue;
 
-                allowed = Mathf.Min(allowed, Mathf.Max(0f, _moveHits[i].distance - 0.04f));
+                allowed = Mathf.Min(allowed, Mathf.Max(0f, _moveHits[i].distance - 0.05f));
             }
 
             return dir * allowed;
         }
+
+        // Pushes the player out of any wall/cover collider it ended up overlapping
+        // (e.g. when a dash skipped a thin wall edge). Called after high-speed
+        // movements like dash to keep the player on the legal side of walls.
+        public void DepenetrateFromBlockers()
+        {
+            if (_bodyCollider == null || !_bodyCollider.enabled) return;
+
+            for (int iter = 0; iter < 3; iter++)
+            {
+                int hits = Physics2D.OverlapCollider(_bodyCollider, new ContactFilter2D
+                {
+                    useTriggers = false,
+                    useLayerMask = true,
+                    layerMask = Physics2D.DefaultRaycastLayers
+                }, _overlapBuffer);
+                bool moved = false;
+                for (int i = 0; i < hits; i++)
+                {
+                    var col = _overlapBuffer[i];
+                    if (col == null || col == _bodyCollider) continue;
+                    if (col.attachedRigidbody != null && col.attachedRigidbody == _rb) continue;
+                    if (!IsBlockingCollider(col)) continue;
+
+                    var dist = _bodyCollider.Distance(col);
+                    if (!dist.isOverlapped) continue;
+                    Vector2 push = dist.normal * (dist.distance - 0.01f); // both negative; subtracts overlap
+                    if (push.sqrMagnitude < 0.000001f) continue;
+                    _rb.position -= push;
+                    transform.position = _rb.position;
+                    moved = true;
+                }
+                if (!moved) break;
+            }
+        }
+        private readonly Collider2D[] _overlapBuffer = new Collider2D[8];
 
         private static bool IsBlockingCollider(Collider2D col)
         {
